@@ -13,7 +13,7 @@ function Section({ icon: Icon, title, color, children, to }) {
           <div style={{ width: 30, height: 30, borderRadius: 8, background: color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Icon size={15} style={{ color }} strokeWidth={2} />
           </div>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'DM Sans, sans-serif' }}>{title}</h3>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Nexa, DM Sans, sans-serif' }}>{title}</h3>
         </div>
         {to && (
           <Link to={to} style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>
@@ -27,15 +27,15 @@ function Section({ icon: Icon, title, color, children, to }) {
 }
 
 function EmptyRow({ text }) {
-  return <p style={{ fontSize: 13, color: 'var(--text-muted)', padding: '4px 0', fontFamily: 'DM Sans, sans-serif' }}>{text}</p>
+  return <p style={{ fontSize: 13, color: 'var(--text-muted)', padding: '4px 0', fontFamily: 'Nexa, DM Sans, sans-serif' }}>{text}</p>
 }
 
 function Row({ primary, secondary, badge, badgeColor }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
       <div>
-        <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'DM Sans, sans-serif' }}>{primary}</p>
-        {secondary && <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, fontFamily: 'DM Sans, sans-serif' }}>{secondary}</p>}
+        <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'Nexa, DM Sans, sans-serif' }}>{primary}</p>
+        {secondary && <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, fontFamily: 'Nexa, DM Sans, sans-serif' }}>{secondary}</p>}
       </div>
       {badge && (
         <span style={{ fontSize: 11, fontWeight: 600, color: badgeColor || 'var(--accent)', background: (badgeColor || 'var(--accent)') + '15', padding: '3px 8px', borderRadius: 6, flexShrink: 0, marginLeft: 8 }}>
@@ -100,18 +100,18 @@ export default function Dashboard() {
 
       {/* Greeting */}
       <div>
-        <h1 style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'DM Sans, sans-serif' }}>Dashboard</h1>
-        <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 4, fontFamily: 'DM Sans, sans-serif' }}>{greeting}, Theo · {dateLabel}</p>
+        <h1 style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Nexa, DM Sans, sans-serif' }}>Dashboard</h1>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 4, fontFamily: 'Nexa, DM Sans, sans-serif' }}>{greeting}, Theo · {dateLabel}</p>
       </div>
 
       {/* Daily Scripture */}
       <div className="glass-card" style={{ padding: 24, background: 'linear-gradient(135deg, rgba(184,155,56,0.07) 0%, rgba(184,155,56,0.02) 100%)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
           <BookOpen size={16} style={{ color: 'var(--accent)' }} strokeWidth={2} />
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: 'DM Sans, sans-serif' }}>Daily Verse</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: 'Nexa, DM Sans, sans-serif' }}>Daily Verse</span>
         </div>
-        <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.65, fontFamily: 'DM Sans, sans-serif', fontStyle: 'italic' }}>"{scripture.text}"</p>
-        <p style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 700, marginTop: 10, fontFamily: 'DM Sans, sans-serif' }}>{scripture.ref}</p>
+        <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.65, fontFamily: 'Nexa, DM Sans, sans-serif', fontStyle: 'italic' }}>"{scripture.text}"</p>
+        <p style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 700, marginTop: 10, fontFamily: 'Nexa, DM Sans, sans-serif' }}>{scripture.ref}</p>
       </div>
 
       {/* Upcoming events & meetings */}
@@ -139,7 +139,7 @@ export default function Dashboard() {
             />
           ))
         }
-        {followUps.length > 5 && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, fontFamily: 'DM Sans, sans-serif' }}>+{followUps.length - 5} more</p>}
+        {followUps.length > 5 && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, fontFamily: 'Nexa, DM Sans, sans-serif' }}>+{followUps.length - 5} more</p>}
       </Section>
 
       {/* Active pipeline */}
