@@ -338,7 +338,7 @@ export default function Assistant() {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
-          max_tokens: 1024,
+          max_tokens: 3000,
           messages: [{ role: 'system', content: systemWithContext }, ...trimmed],
         }),
       })
