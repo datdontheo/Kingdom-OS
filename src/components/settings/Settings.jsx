@@ -84,8 +84,8 @@ export default function Settings() {
       {/* Claude API */}
       <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5 space-y-4">
         <div>
-          <h3 className="text-sm font-medium text-gray-300">Claude API Key</h3>
-          <p className="text-xs text-gray-500 mt-1">Required to use the AI Assistant. Get your key from console.anthropic.com</p>
+          <h3 className="text-sm font-medium text-gray-300">DeepSeek API Key</h3>
+          <p className="text-xs text-gray-500 mt-1">Required to use the AI Assistant. Get your key from platform.deepseek.com/api-keys</p>
         </div>
         <div className="space-y-1.5">
           <label className="text-xs text-gray-400 font-medium">API Key</label>
@@ -95,7 +95,7 @@ export default function Settings() {
               type={showKey ? 'text' : 'password'}
               value={form.claude_api_key}
               onChange={e => setForm(f => ({ ...f, claude_api_key: e.target.value }))}
-              placeholder="sk-ant-…"
+              placeholder="sk-…"
             />
             <button
               onClick={() => setShowKey(!showKey)}
