@@ -4,33 +4,34 @@
 :root {
   color-scheme: light;
 
-  --bg-base:        #faf8f3;
+  --bg-base:        #faf7f2;
   --bg-surface:     #ffffff;
-  --bg-card:        #fefbf6;
-  --bg-card-hover:  #fffaf5;
+  --bg-card:        #ffffff;
+  --bg-card-hover:  #faf8f4;
   --bg-input:       #ffffff;
   --bg-modal:       #ffffff;
 
-  --border:         #e8dcc8;
-  --border-strong:  #dcc9b0;
-  --border-glow:    rgba(184,155,56,0.2);
+  --border:         #ede8df;
+  --border-strong:  #e0d8cb;
+  --border-glow:    rgba(184,155,56,0.18);
 
-  --text-primary:   #2d2620;
+  --text-primary:   #1a1714;
   --text-secondary: #6b6b6b;
-  --text-muted:     #a69071;
+  --text-muted:     #9b9189;
 
   --accent:         #b89b38;
-  --accent-dim:     rgba(184,155,56,0.08);
-  --accent-glow:    rgba(184,155,56,0.15);
+  --accent-dim:     rgba(184,155,56,0.10);
+  --accent-glow:    rgba(184,155,56,0.14);
   --accent-blue:    #5a9fd4;
-  --accent-green:   #66bb6a;
+  --accent-green:   #22a355;
   --accent-amber:   #ffa726;
   --accent-red:     #ef5350;
+  --accent-purple:  #8b5cf6;
 
   --nav-width:      260px;
   --nav-width-sm:   64px;
 
-  --shadow-card:    0 1px 3px rgba(0,0,0,0.08), 0 2px 8px rgba(184,155,56,0.05);
+  --shadow-card:    0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
   --shadow-glow:    0 0 0 1px var(--border-glow), 0 4px 12px rgba(184,155,56,0.08);
 }
 
@@ -89,8 +90,6 @@ body {
 .glass {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
 }
 
@@ -102,8 +101,6 @@ body {
 .glass-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   border-radius: 12px;
   box-shadow: var(--shadow-card);
   transition: all 0.2s;

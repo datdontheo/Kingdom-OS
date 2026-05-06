@@ -25,8 +25,8 @@ function DesktopNavItem({ to, icon: Icon, label }) {
       className={({ isActive }) =>
         `group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 ${
           isActive
-            ? 'bg-[var(--accent-dim)] text-[var(--accent)] border-l-4 border-[var(--accent)]'
-            : 'text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-dim)]'
+            ? 'bg-[var(--accent-dim)] text-[var(--accent)]'
+            : 'text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--accent-dim)]'
         }`
       }
     >
@@ -62,12 +62,6 @@ export default function Layout({ children }) {
   return (
     <div className="flex h-svh overflow-hidden" style={{ background: 'var(--bg-base)' }}>
 
-      {/* Decorative background orbs */}
-      <div className="bg-orb w-[600px] h-[600px] top-[-200px] left-[-100px]"
-        style={{ background: 'radial-gradient(circle, rgba(184,155,56,0.1), transparent 70%)' }} />
-      <div className="bg-orb w-[400px] h-[400px] bottom-[-100px] right-[-50px]"
-        style={{ background: 'radial-gradient(circle, rgba(184,155,56,0.08), transparent 70%)' }} />
-
       {/* Desktop sidebar */}
       <aside
         className="hidden md:flex flex-col shrink-0 z-10"
@@ -75,8 +69,6 @@ export default function Layout({ children }) {
           width: 'var(--nav-width)',
           borderRight: '1px solid var(--border)',
           background: 'var(--bg-surface)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
           padding: '20px 14px',
           gap: 8,
         }}
@@ -117,7 +109,7 @@ export default function Layout({ children }) {
       <div className="flex flex-col flex-1 min-w-0 relative z-10">
         {/* Mobile top bar */}
         <div className="md:hidden flex items-center justify-between px-4 py-3"
-          style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)', backdropFilter: 'blur(12px)' }}>
+          style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm"
               style={{ background: 'linear-gradient(135deg, #b89b38, #d4a817)', color: '#ffffff' }}>
@@ -136,7 +128,7 @@ export default function Layout({ children }) {
 
         {/* Mobile bottom nav */}
         <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50"
-          style={{ background: 'var(--bg-surface)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderTop: '1px solid var(--border)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          style={{ background: 'var(--bg-surface)', borderTop: '1px solid var(--border)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
           <div className="flex items-center justify-around px-1 py-2">
             {NAV.slice(0, 7).map(n => <MobileNavItem key={n.to} {...n} />)}
           </div>

@@ -5,21 +5,21 @@ import { getDailyScripture } from '../../lib/scriptures'
 import { formatDate, isOverdue, inNext7Days, daysSince, today } from '../../lib/utils'
 import { Users, CheckSquare, Target, Settings, TrendingUp, MessageCircle, X, ExternalLink, Plus } from 'lucide-react'
 
-function StatCard({ label, value, icon: Icon, color, to }) {
+function StatCard({ label, value, icon: Icon, color, to, sub }) {
   const content = (
-    <div className="glass-card flex flex-col gap-2" style={{ borderColor: color + '20' }}>
+    <div className="glass-card flex flex-col gap-2" style={{ padding: '20px 20px 16px', borderColor: 'var(--border)' }}>
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500, fontFamily: 'Nexa, sans-serif' }}>{label}</span>
-          <p style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1, marginTop: 4, fontFamily: 'Nexa, sans-serif' }}>{value}</p>
+          <p style={{ fontSize: 30, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.1, marginTop: 6, fontFamily: 'Nexa, sans-serif' }}>{value}</p>
         </div>
         {Icon && (
-          <div style={{ width: 40, height: 40, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: color + '15' }}>
-            <Icon size={20} style={{ color }} strokeWidth={2} />
+          <div style={{ width: 44, height: 44, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: color + '18' }}>
+            <Icon size={22} style={{ color }} strokeWidth={2} />
           </div>
         )}
       </div>
-      {to ? <Link to={to} style={{ fontSize: 11, color: color, fontWeight: 600 }} className="hover:underline">View details →</Link> : null}
+      {sub && <p style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'Nexa, sans-serif', marginTop: 2 }}>{sub}</p>}
     </div>
   )
   return content
@@ -114,61 +114,57 @@ export default function Dashboard() {
     <div style={{ padding: '32px 24px', maxWidth: '1400px', margin: '0 auto' }}>
 
       {/* Page Title */}
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, fontFamily: 'Nexa, sans-serif' }}>Dashboard</h1>
-        <p style={{ fontSize: 14, color: 'var(--text-muted)', fontFamily: 'Nexa, sans-serif' }}>Welcome back, {userName}</p>
+      <div style={{ marginBottom: 28, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h1 style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Nexa, sans-serif' }}>Dashboard</h1>
       </div>
 
       {/* Stats Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 32 }}>
-        <StatCard label="Total Members" value={totalMembers} icon={Users} color="#5a9fd4" to="/people" />
-        <StatCard label="Active Pods" value={activePods} icon={MessageCircle} color="#66bb6a" to="/projects" />
-        <StatCard label="Avg. Attendance" value={avgAttendance + '%'} icon={CheckSquare} color="#b89b38" to="/teaching" />
-        <StatCard label="Pending Tasks" value={tasks.length} icon={Target} color="#ffa726" to="/tasks" />
+        <StatCard label="Total Members" value={totalMembers} icon={Users} color="#c4920a" to="/people" sub={`${totalMembers} active`} />
+        <StatCard label="Active Pods" value={activePods} icon={MessageCircle} color="#22a355" to="/projects" sub="Across 1 regions" />
+        <StatCard label="Avg. Attendance" value={avgAttendance + '%'} icon={CheckSquare} color="#8b5cf6" to="/teaching" sub="Last 4 weeks" />
+        <StatCard label="Pending Tasks" value={tasks.length} icon={Target} color="#ffa726" to="/tasks" sub="Action needed" />
       </div>
 
       {/* Two Column Layout */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24, marginBottom: 32 }}>
-        
-        {/* Left Column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
-          {/* Ministry Hierarchy */}
-          <div>
-            <SectionHeader title="Ministry Hierarchy" />
-            {loading ? (
-              <EmptyState text="Loading..." />
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <HierarchyItem region="Cape Coast" items="1" />
-              </div>
-            )}
-          </div>
-
+        {/* Left Column - Ministry Hierarchy */}
+        <div className="glass-card" style={{ padding: 24 }}>
+          <SectionHeader title="Ministry Hierarchy" />
+          {loading ? (
+            <EmptyState text="Loading..." />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <HierarchyItem region="Cape Coast" items="1" />
+            </div>
+          )}
         </div>
 
-        {/* Right Column - Quick Actions */}
-        <div>
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16, fontFamily: 'Nexa, sans-serif' }}>Quick Actions</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <QuickActionButton icon={Plus} label="Add New Member" to="/people" />
-            <QuickActionButton icon={Users} label="Pending Follow-ups" to="/people" />
-            <QuickActionButton icon={CheckSquare} label="Upcoming Meetings" to="/meetings" />
+        {/* Right Column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+          {/* Quick Actions */}
+          <div className="glass-card" style={{ padding: 20 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 14, fontFamily: 'Nexa, sans-serif' }}>Quick Actions</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <QuickActionButton icon={Plus} label="Add New Member" to="/people" />
+              <QuickActionButton icon={Users} label="Pending Follow-ups" to="/people" />
+              <QuickActionButton icon={CheckSquare} label="Upcoming Meetings" to="/meetings" />
+            </div>
           </div>
-        </div>
 
-      </div>
+          {/* Recent Reports */}
+          <div className="glass-card" style={{ padding: 20 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 14, fontFamily: 'Nexa, sans-serif' }}>Recent Reports</h3>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'Nexa, sans-serif' }}>No reports yet.</p>
+          </div>
 
-      {/* Recent Reports */}
-      <div>
-        <SectionHeader title="Recent Reports" />
-        <div className="glass-card" style={{ padding: '32px', textAlign: 'center' }}>
-          <p style={{ fontSize: 14, color: 'var(--text-muted)', fontFamily: 'Nexa, sans-serif' }}>No reports yet.</p>
         </div>
       </div>
 
       {/* Devotion Section */}
-      <div style={{ marginTop: 32, borderRadius: 12, overflow: 'hidden', background: 'linear-gradient(135deg, #b89b38, #d4a817)' }}>
+      <div style={{ marginTop: 32, borderRadius: 12, overflow: 'hidden', background: '#7a5c08' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 24, color: 'white' }}>
           <div className="flex items-center gap-3">
             <Settings size={20} strokeWidth={2} />
