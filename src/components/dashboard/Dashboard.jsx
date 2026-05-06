@@ -118,14 +118,6 @@ export default function Dashboard() {
         <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Nexa, sans-serif' }}>Dashboard</h1>
       </div>
 
-      {/* Stats Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 32 }}>
-        <StatCard label="Total Members" value={totalMembers} icon={Users} color="#c4920a" to="/people" />
-        <StatCard label="Active Pods" value={activePods} icon={MessageCircle} color="#22a355" to="/projects" />
-        <StatCard label="Avg. Attendance" value={avgAttendance + '%'} icon={CheckSquare} color="#8b5cf6" to="/teaching" />
-        <StatCard label="Pending Tasks" value={tasks.length} icon={Target} color="#ffa726" to="/tasks" />
-      </div>
-
       {/* Quick Actions */}
       <div style={{ marginTop: 24 }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16, fontFamily: 'Nexa, sans-serif' }}>Quick Actions</h3>
