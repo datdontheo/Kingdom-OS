@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { formatDate, daysSince, leaderStatusColor, LEADER_FOLLOW_UP_STATUSES } from '../../lib/utils'
-import { Users, Plus, X, MessageCircle } from 'lucide-react'
+import { Users, Plus, X, MessageCircle, Download } from 'lucide-react'
 
 const FONT = 'Nexa, DM Sans, sans-serif'
 
@@ -160,11 +160,75 @@ function LeaderCard({ leader, onEdit, onRefresh }) {
   )
 }
 
+function ImportModal({ onClose, onImport }) {
+  const [members, setMembers] = useState([])
+  const [selected, setSelected] = useState([])
+  const [importing, setImporting] = useState(false)
+
+  useEffect(() => {
+    supabase.from('people').select('id, name, role, phone_number').order('name')
+      .then(({ data }) => setMembers(data || []))
+  }, [])
+
+  function toggle(id) {
+    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  async function handleImport() {
+    if (!selected.length) return
+    setImporting(true)
+    const toImport = members.filter(m => selected.includes(m.id))
+    await supabase.from('leaders').insert(toImport.map(m => ({
+      name: m.name,
+      role: m.role || null,
+      phone_number: m.phone_number || null,
+      follow_up_status: 'Active',
+    })))
+    setImporting(false)
+    onImport()
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <span style={{ fontFamily: FONT }}>Import from Members</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}><X size={18} /></button>
+        </div>
+        <div className="modal-body">
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: FONT, marginBottom: 12 }}>Select members to add to the Leaders list. Their name, role, and phone will be copied.</p>
+          <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {members.length === 0 ? (
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: FONT }}>No members found in your Members list.</p>
+            ) : members.map(m => (
+              <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
+                <input type="checkbox" checked={selected.includes(m.id)} onChange={() => toggle(m.id)}
+                  style={{ width: 16, height: 16, accentColor: 'var(--accent)', flexShrink: 0 }} />
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: FONT }}>{m.name}</p>
+                  {m.role && <p style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: FONT }}>{m.role}</p>}
+                </div>
+              </label>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+            <button className="btn-primary" onClick={handleImport} disabled={importing || !selected.length} style={{ flex: 1 }}>
+              {importing ? 'Importing…' : `Import ${selected.length > 0 ? selected.length : ''} Selected`}
+            </button>
+            <button className="btn-ghost" onClick={onClose}>Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Leaders() {
   const [leaders, setLeaders] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('All')
   const [modal, setModal] = useState(null)
+  const [showImport, setShowImport] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -186,9 +250,14 @@ export default function Leaders() {
           <h1 className="page-title">Leaders</h1>
           <p className="page-subtitle">{leaders.length} leader{leaders.length !== 1 ? 's' : ''} · {leaders.filter(l => l.follow_up_status !== 'No action needed').length} need follow-up</p>
         </div>
-        <button className="btn-primary" onClick={() => setModal({})} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Plus size={15} /> Add Leader
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn-ghost" onClick={() => setShowImport(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+            <Download size={14} /> Import
+          </button>
+          <button className="btn-primary" onClick={() => setModal({})} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Plus size={15} /> Add Leader
+          </button>
+        </div>
       </div>
 
       {/* Filter bar */}
@@ -223,6 +292,9 @@ export default function Leaders() {
 
       {modal !== null && (
         <Modal leader={modal.id ? modal : null} onClose={() => setModal(null)} onSave={() => { setModal(null); load() }} />
+      )}
+      {showImport && (
+        <ImportModal onClose={() => setShowImport(false)} onImport={() => { setShowImport(false); load() }} />
       )}
     </div>
   )
