@@ -33,6 +33,7 @@ export default function Settings() {
   const [settingsId, setSettingsId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showSql, setShowSql] = useState(false)
@@ -50,12 +51,25 @@ export default function Settings() {
 
   async function save() {
     setSaving(true)
-    const payload = { claude_api_key: form.claude_api_key, user_name: form.user_name, timezone: form.timezone, phone_number: form.phone_number }
-    if (settingsId) await supabase.from('settings').update(payload).eq('id', settingsId)
-    else { const { data } = await supabase.from('settings').insert(payload).select().single(); if (data) setSettingsId(data.id) }
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    setSaveError('')
+    try {
+      const payload = { claude_api_key: form.claude_api_key, user_name: form.user_name, timezone: form.timezone, phone_number: form.phone_number }
+      let error
+      if (settingsId) {
+        ;({ error } = await supabase.from('settings').update(payload).eq('id', settingsId))
+      } else {
+        const result = await supabase.from('settings').insert(payload).select().single()
+        error = result.error
+        if (result.data) setSettingsId(result.data.id)
+      }
+      if (error) throw error
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (err) {
+      setSaveError(err.message || 'Save failed. Check your Supabase connection.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   function copySchema() {
@@ -121,6 +135,11 @@ export default function Settings() {
       <button onClick={save} disabled={saving} className="btn-primary" style={{ width: '100%', padding: '12px', fontSize: 14, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
         {saved ? <><Check size={16} /> Saved</> : saving ? 'Saving…' : 'Save Settings'}
       </button>
+      {saveError && (
+        <p style={{ fontSize: 12, color: 'var(--accent-red)', textAlign: 'center', padding: '8px 12px', background: 'rgba(239,83,80,0.08)', borderRadius: 8, border: '1px solid rgba(239,83,80,0.2)' }}>
+          {saveError}
+        </p>
+      )}
 
       {/* Database */}
       <Section title="Database Setup" subtitle="If your Supabase tables aren't created yet, copy this SQL and run it in your Supabase SQL editor.">

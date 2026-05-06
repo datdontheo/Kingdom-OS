@@ -23,15 +23,19 @@ function DesktopNavItem({ to, icon: Icon, label }) {
       to={to}
       end={to === '/'}
       className={({ isActive }) =>
-        `group flex items-center gap-3 px-3 py-3.5 rounded-lg text-sm font-bold transition-all duration-200 ${
+        `group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 ${
           isActive
             ? 'bg-[var(--accent-dim)] text-[var(--accent)]'
-            : 'text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--accent-dim)]'
+            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-base)]'
         }`
       }
     >
-      <Icon size={18} strokeWidth={2} className="shrink-0" />
-      <span className="truncate" style={{ fontFamily: 'Nexa, sans-serif', fontWeight: 700 }}>{label}</span>
+      {({ isActive }) => (
+        <>
+          <Icon size={17} strokeWidth={isActive ? 2.5 : 2} className="shrink-0" />
+          <span className="truncate" style={{ fontFamily: 'Nexa, sans-serif', fontWeight: isActive ? 700 : 500, fontSize: 14 }}>{label}</span>
+        </>
+      )}
     </NavLink>
   )
 }
@@ -88,7 +92,7 @@ export default function Layout({ children }) {
         </div>
 
         {/* Nav items */}
-        <div className="flex-1 flex flex-col gap-2">
+        <div className="flex-1 flex flex-col gap-0.5">
           {NAV.map(n => <DesktopNavItem key={n.to} {...n} />)}
         </div>
 
