@@ -284,7 +284,7 @@ function MessageBubble({ msg, timestamp }) {
 }
 
 // ── Main component ─────────────────────────────────────────────────
-const MAX_HISTORY = 40
+const MAX_HISTORY = 8
 
 export default function Assistant() {
   const [messages, setMessages] = useState([])
@@ -370,14 +370,14 @@ export default function Assistant() {
       const triggers = isBriefing ? [] : detectActionTriggers(userText)
       const triggerHint = buildTriggerHint(triggers)
       const systemWithContext = SYSTEM_PROMPT + '\n\n' + context + triggerHint
-      const trimmed = newMessages.slice(-MAX_HISTORY).map(m => ({ role: m.role, content: m.content }))
+      const trimmed = newMessages.slice(-MAX_HISTORY).map(m => ({ role: m.role, content: m.content.slice(0, 1200) }))
 
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
-          max_tokens: 3000,
+          max_tokens: 1500,
           messages: [{ role: 'system', content: systemWithContext }, ...trimmed],
         }),
       })
