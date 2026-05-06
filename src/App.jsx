@@ -1,12 +1,15 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/layout/Layout'
 import Dashboard from './components/dashboard/Dashboard'
 import Assistant from './components/assistant/Assistant'
-import People from './components/people/People'
 import Tasks from './components/tasks/Tasks'
 import Teaching from './components/teaching/Teaching'
-import Projects from './components/projects/Projects'
 import Meetings from './components/meetings/Meetings'
+import Leaders from './components/leaders/Leaders'
+import Members from './components/members/Members'
+import Reminders from './components/reminders/Reminders'
+import Goals from './components/goals/Goals'
+import Suggestions from './components/suggestions/Suggestions'
 import Settings from './components/settings/Settings'
 
 export default function App() {
@@ -15,12 +18,17 @@ export default function App() {
       <Layout>
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/assistant" element={<Assistant />} />
-          <Route path="/people" element={<People />} />
           <Route path="/tasks" element={<Tasks />} />
-          <Route path="/teaching" element={<Teaching />} />
-          <Route path="/projects" element={<Projects />} />
           <Route path="/meetings" element={<Meetings />} />
+          <Route path="/teachings" element={<Teaching />} />
+          <Route path="/teaching" element={<Navigate to="/teachings" replace />} />
+          <Route path="/leaders" element={<Leaders />} />
+          <Route path="/members" element={<Members />} />
+          <Route path="/people" element={<Navigate to="/members" replace />} />
+          <Route path="/reminders" element={<Reminders />} />
+          <Route path="/goals" element={<Goals />} />
+          <Route path="/suggestions" element={<Suggestions />} />
+          <Route path="/assistant" element={<Assistant />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </Layout>

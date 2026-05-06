@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, MessageSquare, Users, CheckSquare,
-  BookOpen, Target, FileText, Settings, Sun, Moon, Menu, Bell
+  BookOpen, Target, FileText, Settings, Sun, Moon, Menu, Bell,
+  UserCircle, Lightbulb
 } from 'lucide-react'
 import { useTheme } from '../../hooks/useTheme'
 import { useReminders } from '../../hooks/useReminders'
@@ -11,12 +12,15 @@ const FONT = 'Nexa, DM Sans, sans-serif'
 
 const NAV = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/assistant', icon: MessageSquare, label: 'Assistant' },
-  { to: '/people', icon: Users, label: 'People' },
   { to: '/tasks', icon: CheckSquare, label: 'Tasks' },
-  { to: '/teaching', icon: BookOpen, label: 'Teaching' },
-  { to: '/projects', icon: Target, label: 'Projects' },
   { to: '/meetings', icon: FileText, label: 'Meetings' },
+  { to: '/teachings', icon: BookOpen, label: 'Teachings' },
+  { to: '/leaders', icon: Users, label: 'Leaders' },
+  { to: '/members', icon: UserCircle, label: 'Members' },
+  { to: '/reminders', icon: Bell, label: 'Reminders' },
+  { to: '/goals', icon: Target, label: 'Goals' },
+  { to: '/suggestions', icon: Lightbulb, label: 'Suggestions' },
+  { to: '/assistant', icon: MessageSquare, label: 'Assistant' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 
@@ -43,7 +47,7 @@ function SidebarContent({ onClose, theme, toggle }) {
   return (
     <>
       {/* Logo */}
-      <div style={{ padding: '4px 4px 28px' }}>
+      <div style={{ padding: '4px 4px 20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 40, height: 40, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #b89b38, #d4a817)', color: '#fff', fontWeight: 700, fontSize: 18, flexShrink: 0 }}>
             K
@@ -56,7 +60,7 @@ function SidebarContent({ onClose, theme, toggle }) {
       </div>
 
       {/* Nav items */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, overflowY: 'auto' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
         {NAV.map(n => <NavItem key={n.to} {...n} onClick={onClose} />)}
       </div>
 
