@@ -23,7 +23,7 @@ function DesktopNavItem({ to, icon: Icon, label }) {
       to={to}
       end={to === '/'}
       className={({ isActive }) =>
-        `group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 ${
+        `group flex items-center gap-3 px-3 py-3.5 rounded-lg text-sm font-bold transition-all duration-200 ${
           isActive
             ? 'bg-[var(--accent-dim)] text-[var(--accent)]'
             : 'text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--accent-dim)]'
@@ -88,7 +88,7 @@ export default function Layout({ children }) {
         </div>
 
         {/* Nav items */}
-        <div className="flex-1 flex flex-col gap-1">
+        <div className="flex-1 flex flex-col gap-2">
           {NAV.map(n => <DesktopNavItem key={n.to} {...n} />)}
         </div>
 
