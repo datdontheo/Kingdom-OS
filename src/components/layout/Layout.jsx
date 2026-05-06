@@ -19,22 +19,26 @@ const NAV = [
 
 function DesktopNavItem({ to, icon: Icon, label }) {
   return (
-    <NavLink
-      to={to}
-      end={to === '/'}
-      className={({ isActive }) =>
-        `group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 ${
-          isActive
-            ? 'bg-[var(--accent-dim)] text-[var(--accent)]'
-            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-base)]'
-        }`
-      }
-    >
+    <NavLink to={to} end={to === '/'} style={{ textDecoration: 'none' }}>
       {({ isActive }) => (
-        <>
-          <Icon size={17} strokeWidth={isActive ? 2.5 : 2} className="shrink-0" />
-          <span className="truncate" style={{ fontFamily: 'Nexa, sans-serif', fontWeight: isActive ? 700 : 500, fontSize: 14 }}>{label}</span>
-        </>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '11px 12px',
+            borderRadius: 10,
+            background: isActive ? 'rgba(184,155,56,0.11)' : 'transparent',
+            color: isActive ? 'var(--accent)' : '#3d3d4e',
+            cursor: 'pointer',
+            transition: 'background 0.15s, color 0.15s',
+          }}
+          onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = 'var(--bg-base)' } }}
+          onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = 'transparent' } }}
+        >
+          <Icon size={18} strokeWidth={isActive ? 2 : 1.75} style={{ flexShrink: 0 }} />
+          <span style={{ fontFamily: 'Nexa, sans-serif', fontWeight: isActive ? 700 : 500, fontSize: 15 }}>{label}</span>
+        </div>
       )}
     </NavLink>
   )
@@ -92,7 +96,7 @@ export default function Layout({ children }) {
         </div>
 
         {/* Nav items */}
-        <div className="flex-1 flex flex-col gap-0.5">
+        <div className="flex-1 flex flex-col" style={{ gap: 4 }}>
           {NAV.map(n => <DesktopNavItem key={n.to} {...n} />)}
         </div>
 
