@@ -154,7 +154,7 @@ export default function Assistant() {
     if (!apiKey) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Please add your DeepSeek API key in Settings to use the assistant.'
+        content: 'Please add your Claude API key in Settings to use the assistant.'
       }])
       return
     }
@@ -169,19 +169,19 @@ export default function Assistant() {
       const context = await fetchMinistryContext()
       const systemWithContext = SYSTEM_PROMPT + '\n\n' + context
 
-      const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
-          model: 'deepseek-chat',
+          model: 'claude-sonnet-4-20250514',
           max_tokens: 1024,
-          messages: [
-            { role: 'system', content: systemWithContext },
-            ...newMessages,
-          ],
+          system: systemWithContext,
+          messages: newMessages,
         }),
       })
 
@@ -191,7 +191,7 @@ export default function Assistant() {
       }
 
       const data = await response.json()
-      const assistantMsg = { role: 'assistant', content: data.choices[0].message.content }
+      const assistantMsg = { role: 'assistant', content: data.content[0].text }
       setMessages(prev => [...prev, assistantMsg])
     } catch (err) {
       setMessages(prev => [...prev, {
@@ -209,7 +209,7 @@ export default function Assistant() {
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-800/60 bg-gray-900/30 shrink-0">
         <h2 className="text-base font-semibold text-white">Kingdom OS Assistant</h2>
-        <p className="text-xs text-gray-500">Powered by DeepSeek · KSM Ministry Co-Pilot</p>
+        <p className="text-xs text-gray-500">Powered by Claude · KSM Ministry Co-Pilot</p>
       </div>
 
       {/* Messages */}
@@ -219,7 +219,7 @@ export default function Assistant() {
             <Bot size={32} className="mx-auto mb-3 text-violet-700" />
             <p className="text-sm">Your ministry co-pilot is ready.</p>
             {!apiKey && (
-              <p className="text-xs mt-2 text-amber-500">Add your DeepSeek API key in Settings to begin.</p>
+              <p className="text-xs mt-2 text-amber-500">Add your Claude API key in Settings to begin.</p>
             )}
           </div>
         )}
