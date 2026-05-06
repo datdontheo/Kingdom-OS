@@ -50,7 +50,7 @@ YOUR CORE RESPONSIBILITIES:
 TONE: Warm, direct, and practically helpful — like a trusted co-labourer who knows the weight of the call. Never make Theo feel behind or overwhelmed. Speak plainly. Anchor suggestions in Scripture naturally.
 
 ACTIONS — IMPORTANT:
-When you want to suggest a concrete action (sending a WhatsApp message, creating a task, or setting a reminder), append ONE action block at the very end of your response in EXACTLY this format:
+When you want to suggest concrete actions (sending WhatsApp messages, creating tasks, or setting reminders), append action blocks at the very end of your response in EXACTLY this format. You may include up to 3 action blocks when multiple actions are relevant.
 
 For WhatsApp: <ACTION>{"type":"send_whatsapp","to":"[Person Name]","phone":"[phone number if known from context, else empty string]","message":"[the message text to pre-fill]"}</ACTION>
 
@@ -58,7 +58,7 @@ For a task: <ACTION>{"type":"create_task","title":"[task title]","category":"[Te
 
 For a reminder: <ACTION>{"type":"set_reminder","title":"[reminder title]","body":"[details]","due_at":"[ISO 8601 datetime e.g. 2026-05-10T08:00:00]","person":"[person name or empty]","whatsapp_message":"[optional message to send to yourself as reminder]"}</ACTION>
 
-Only append an action block when there is a specific, clear, actionable suggestion. Never output more than one action block per response. Do not explain the action block — just append it silently.`
+Only append action blocks when there are specific, clear, actionable suggestions. Include one action block per distinct action. Do not explain the action blocks — just append them silently at the end.`
 
 // ── Ministry context ───────────────────────────────────────────────
 async function fetchMinistryContext() {
@@ -98,12 +98,14 @@ async function fetchMinistryContext() {
 }
 
 // ── Action parsing ─────────────────────────────────────────────────
-function parseAction(text) {
-  const match = text.match(/<ACTION>([\s\S]*?)<\/ACTION>/)
-  if (!match) return { text, action: null }
-  try {
-    return { text: text.replace(/<ACTION>[\s\S]*?<\/ACTION>/, '').trim(), action: JSON.parse(match[1]) }
-  } catch { return { text, action: null } }
+function parseActions(text) {
+  const matches = [...text.matchAll(/<ACTION>([\s\S]*?)<\/ACTION>/g)]
+  const actions = []
+  for (const match of matches) {
+    try { actions.push(JSON.parse(match[1])) } catch {}
+  }
+  const cleanText = text.replace(/<ACTION>[\s\S]*?<\/ACTION>/g, '').trim()
+  return { text: cleanText, actions }
 }
 
 // ── ActionCard ─────────────────────────────────────────────────────
@@ -215,8 +217,8 @@ function ActionCard({ action, onDismiss }) {
 // ── Message bubble ─────────────────────────────────────────────────
 function MessageBubble({ msg, timestamp }) {
   const isUser = msg.role === 'user'
-  const { text, action } = parseAction(msg.content)
-  const [actionDismissed, setActionDismissed] = useState(false)
+  const { text, actions } = parseActions(msg.content)
+  const [dismissed, setDismissed] = useState([])
 
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
@@ -236,16 +238,16 @@ function MessageBubble({ msg, timestamp }) {
             background: isUser ? 'linear-gradient(135deg, var(--accent), var(--accent-blue))' : 'var(--bg-card)',
             border: isUser ? 'none' : '1px solid var(--border)',
             color: isUser ? '#fff' : 'var(--text-primary)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
           }}
         >
           {text.split('\n').map((line, i, arr) => (
             <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
           ))}
         </div>
-        {action && !actionDismissed && (
-          <ActionCard action={action} onDismiss={() => setActionDismissed(true)} />
+        {actions.map((action, i) =>
+          !dismissed.includes(i) && (
+            <ActionCard key={i} action={action} onDismiss={() => setDismissed(prev => [...prev, i])} />
+          )
         )}
         {timestamp && (
           <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, textAlign: isUser ? 'right' : 'left' }}>
