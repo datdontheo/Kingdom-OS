@@ -113,26 +113,36 @@ function MessageBubble({ msg }) {
   )
 }
 
+const MAX_HISTORY = 40 // keep last 40 messages sent to AI to stay within token limits
+
 export default function Assistant() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [apiKey, setApiKey] = useState('')
   const [briefingSent, setBriefingSent] = useState(false)
+  const [clearing, setClearing] = useState(false)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
+  // Load API key and full message history from Supabase on mount
   useEffect(() => {
-    supabase.from('settings').select('claude_api_key').limit(1).single()
-      .then(({ data }) => {
-        if (data?.claude_api_key) setApiKey(data.claude_api_key)
-      })
+    async function init() {
+      const [{ data: settings }, { data: history }] = await Promise.all([
+        supabase.from('settings').select('claude_api_key').limit(1).single(),
+        supabase.from('chat_messages').select('role, content, created_at').order('created_at', { ascending: true }),
+      ])
+      if (settings?.claude_api_key) setApiKey(settings.claude_api_key)
+      if (history?.length) setMessages(history.map(m => ({ role: m.role, content: m.content })))
+    }
+    init()
   }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Auto morning briefing — only if no history exists yet today
   useEffect(() => {
     if (apiKey && !briefingSent && messages.length === 0) {
       const lastBriefingDate = sessionStorage.getItem('ksm_briefing_date')
@@ -143,7 +153,20 @@ export default function Assistant() {
         setBriefingSent(true)
       }
     }
-  }, [apiKey])
+  }, [apiKey, messages])
+
+  async function saveMessage(role, content) {
+    await supabase.from('chat_messages').insert({ role, content })
+  }
+
+  async function clearHistory() {
+    if (!confirm('Clear all conversation history?')) return
+    setClearing(true)
+    await supabase.from('chat_messages').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    setMessages([])
+    sessionStorage.removeItem('ksm_briefing_date')
+    setClearing(false)
+  }
 
   async function sendMessage(e, isBriefing = false) {
     if (e) e.preventDefault()
@@ -164,10 +187,13 @@ export default function Assistant() {
     setMessages(newMessages)
     setInput('')
     setLoading(true)
+    await saveMessage('user', userText)
 
     try {
       const context = await fetchMinistryContext()
       const systemWithContext = SYSTEM_PROMPT + '\n\n' + context
+      // Send only the last MAX_HISTORY messages to avoid token overflow
+      const trimmed = newMessages.slice(-MAX_HISTORY)
 
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
@@ -180,7 +206,7 @@ export default function Assistant() {
           max_tokens: 1024,
           messages: [
             { role: 'system', content: systemWithContext },
-            ...newMessages,
+            ...trimmed,
           ],
         }),
       })
@@ -193,6 +219,7 @@ export default function Assistant() {
       const data = await response.json()
       const assistantMsg = { role: 'assistant', content: data.choices[0].message.content }
       setMessages(prev => [...prev, assistantMsg])
+      await saveMessage('assistant', assistantMsg.content)
     } catch (err) {
       setMessages(prev => [...prev, {
         role: 'assistant',
@@ -207,9 +234,20 @@ export default function Assistant() {
   return (
     <div className="flex flex-col h-full max-h-[calc(100svh-0px)] md:max-h-svh">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-800/60 bg-gray-900/30 shrink-0">
-        <h2 className="text-base font-semibold text-white">Kingdom OS Assistant</h2>
-        <p className="text-xs text-gray-500">Powered by Groq · KSM Ministry Co-Pilot</p>
+      <div className="px-4 py-3 border-b border-gray-800/60 bg-gray-900/30 shrink-0 flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-white">Kingdom OS Assistant</h2>
+          <p className="text-xs text-gray-500">Powered by Groq · KSM Ministry Co-Pilot</p>
+        </div>
+        {messages.length > 0 && (
+          <button
+            onClick={clearHistory}
+            disabled={clearing}
+            className="text-xs text-gray-500 hover:text-red-400 transition-colors px-2 py-1 rounded-lg hover:bg-gray-800"
+          >
+            {clearing ? 'Clearing…' : 'Clear history'}
+          </button>
+        )}
       </div>
 
       {/* Messages */}
