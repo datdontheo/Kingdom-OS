@@ -1,45 +1,58 @@
 import { useEffect, useState } from 'react'
 import { supabase, SUPABASE_SCHEMA } from '../../lib/supabase'
-import { Eye, EyeOff, Copy, Check } from 'lucide-react'
+import { useTheme } from '../../hooks/useTheme'
+import { Eye, EyeOff, Copy, Check, Sun, Moon } from 'lucide-react'
 
-const inputCls = 'w-full bg-gray-800/60 border border-gray-700/60 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-violet-600/60'
+function Field({ label, hint, children }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <label style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>{label}</label>
+      {children}
+      {hint && <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>{hint}</p>}
+    </div>
+  )
+}
+
+function Section({ title, subtitle, children }) {
+  return (
+    <div className="glass-card" style={{ padding: 20 }}>
+      <div style={{ marginBottom: 16 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</h3>
+        {subtitle && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>{subtitle}</p>}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {children}
+      </div>
+    </div>
+  )
+}
 
 export default function Settings() {
-  const [form, setForm] = useState({ claude_api_key: '', user_name: 'Theo', timezone: 'Africa/Accra' })
+  const { theme, toggle } = useTheme()
+  const [form, setForm] = useState({ claude_api_key: '', user_name: 'Theo', timezone: 'Africa/Accra', phone_number: '' })
   const [settingsId, setSettingsId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [showKey, setShowKey] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showSql, setShowSql] = useState(false)
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   useEffect(() => {
     supabase.from('settings').select('*').limit(1).single()
       .then(({ data }) => {
         if (data) {
           setSettingsId(data.id)
-          setForm({
-            claude_api_key: data.claude_api_key || '',
-            user_name: data.user_name || 'Theo',
-            timezone: data.timezone || 'Africa/Accra',
-          })
+          setForm({ claude_api_key: data.claude_api_key || '', user_name: data.user_name || 'Theo', timezone: data.timezone || 'Africa/Accra', phone_number: data.phone_number || '' })
         }
       })
   }, [])
 
   async function save() {
     setSaving(true)
-    const payload = {
-      claude_api_key: form.claude_api_key,
-      user_name: form.user_name,
-      timezone: form.timezone,
-    }
-    if (settingsId) {
-      await supabase.from('settings').update(payload).eq('id', settingsId)
-    } else {
-      const { data } = await supabase.from('settings').insert(payload).select().single()
-      if (data) setSettingsId(data.id)
-    }
+    const payload = { claude_api_key: form.claude_api_key, user_name: form.user_name, timezone: form.timezone, phone_number: form.phone_number }
+    if (settingsId) await supabase.from('settings').update(payload).eq('id', settingsId)
+    else { const { data } = await supabase.from('settings').insert(payload).select().single(); if (data) setSettingsId(data.id) }
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
@@ -52,100 +65,81 @@ export default function Settings() {
   }
 
   return (
-    <div className="max-w-xl mx-auto px-4 pt-6 pb-10 space-y-6">
+    <div style={{ maxWidth: 560, margin: '0 auto', padding: '24px 16px 40px', display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div>
-        <h2 className="text-lg font-semibold text-white">Settings</h2>
-        <p className="text-xs text-gray-500 mt-0.5">Configure your Kingdom OS instance</p>
+        <h2 className="page-title">Settings</h2>
+        <p className="page-subtitle">Configure your Kingdom OS instance</p>
       </div>
+
+      {/* Appearance */}
+      <Section title="Appearance" subtitle="Choose your preferred theme">
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={() => theme !== 'dark' && toggle()}
+            style={{ flex: 1, padding: '12px', borderRadius: 12, border: `1px solid ${theme === 'dark' ? 'var(--border-glow)' : 'var(--border)'}`, background: theme === 'dark' ? 'var(--accent-dim)' : 'transparent', color: theme === 'dark' ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13, fontWeight: 500, transition: 'all 0.2s' }}>
+            <Moon size={16} /> Dark
+          </button>
+          <button onClick={() => theme !== 'light' && toggle()}
+            style={{ flex: 1, padding: '12px', borderRadius: 12, border: `1px solid ${theme === 'light' ? 'var(--border-glow)' : 'var(--border)'}`, background: theme === 'light' ? 'var(--accent-dim)' : 'transparent', color: theme === 'light' ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13, fontWeight: 500, transition: 'all 0.2s' }}>
+            <Sun size={16} /> Light
+          </button>
+        </div>
+      </Section>
 
       {/* Profile */}
-      <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5 space-y-4">
-        <h3 className="text-sm font-medium text-gray-300">Profile</h3>
-        <div className="space-y-1.5">
-          <label className="text-xs text-gray-400 font-medium">Your Name</label>
-          <input
-            className={inputCls}
-            value={form.user_name}
-            onChange={e => setForm(f => ({ ...f, user_name: e.target.value }))}
-            placeholder="Theo"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-xs text-gray-400 font-medium">Timezone</label>
-          <input
-            className={inputCls}
-            value={form.timezone}
-            readOnly
-          />
-          <p className="text-xs text-gray-600">Fixed to Africa/Accra (GMT)</p>
-        </div>
-      </div>
+      <Section title="Profile">
+        <Field label="Your Name">
+          <input className="ksm-input" value={form.user_name} onChange={e => set('user_name', e.target.value)} placeholder="Theo" />
+        </Field>
+        <Field label="Your WhatsApp Number" hint="Used to send reminders to yourself via WhatsApp">
+          <input className="ksm-input" value={form.phone_number} onChange={e => set('phone_number', e.target.value)} placeholder="+233244123456" />
+        </Field>
+        <Field label="Timezone" hint="Fixed to Africa/Accra (GMT)">
+          <input className="ksm-input" value={form.timezone} readOnly style={{ opacity: 0.6 }} />
+        </Field>
+      </Section>
 
-      {/* Claude API */}
-      <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5 space-y-4">
-        <div>
-          <h3 className="text-sm font-medium text-gray-300">Groq API Key</h3>
-          <p className="text-xs text-gray-500 mt-1">Required to use the AI Assistant. Get your free key from console.groq.com</p>
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-xs text-gray-400 font-medium">API Key</label>
-          <div className="relative">
+      {/* Groq API */}
+      <Section title="Groq API Key" subtitle="Required to use the AI Assistant. Get your free key at console.groq.com">
+        <Field label="API Key">
+          <div style={{ position: 'relative' }}>
             <input
-              className={inputCls + ' pr-10'}
+              className="ksm-input"
               type={showKey ? 'text' : 'password'}
               value={form.claude_api_key}
-              onChange={e => setForm(f => ({ ...f, claude_api_key: e.target.value }))}
+              onChange={e => set('claude_api_key', e.target.value)}
               placeholder="gsk_…"
+              style={{ paddingRight: 40 }}
             />
-            <button
-              onClick={() => setShowKey(!showKey)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
-            >
+            <button onClick={() => setShowKey(!showKey)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
               {showKey ? <EyeOff size={15} /> : <Eye size={15} />}
             </button>
           </div>
-          <p className="text-xs text-gray-600">Stored securely in your Supabase database.</p>
-        </div>
-      </div>
+        </Field>
+      </Section>
 
-      {/* Save button */}
-      <button
-        onClick={save}
-        disabled={saving}
-        className="w-full py-2.5 rounded-xl bg-violet-700 hover:bg-violet-600 disabled:opacity-50 text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
-      >
+      {/* Save */}
+      <button onClick={save} disabled={saving} className="btn-primary" style={{ width: '100%', padding: '12px', fontSize: 14, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
         {saved ? <><Check size={16} /> Saved</> : saving ? 'Saving…' : 'Save Settings'}
       </button>
 
-      {/* Database setup */}
-      <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5 space-y-3">
-        <div>
-          <h3 className="text-sm font-medium text-gray-300">Database Setup</h3>
-          <p className="text-xs text-gray-500 mt-1">If you haven't created the Supabase tables yet, copy this SQL and run it in your Supabase SQL editor.</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowSql(!showSql)}
-            className="text-xs text-violet-400 hover:text-violet-300 px-3 py-1.5 rounded-lg border border-violet-800/40"
-          >
+      {/* Database */}
+      <Section title="Database Setup" subtitle="If your Supabase tables aren't created yet, copy this SQL and run it in your Supabase SQL editor.">
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={() => setShowSql(!showSql)} className="btn-ghost" style={{ fontSize: 12, padding: '6px 14px' }}>
             {showSql ? 'Hide SQL' : 'Show SQL'}
           </button>
-          <button
-            onClick={copySchema}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-200 px-3 py-1.5 rounded-lg border border-gray-700/60"
-          >
+          <button onClick={copySchema} className="btn-ghost" style={{ fontSize: 12, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 6 }}>
             {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy SQL</>}
           </button>
         </div>
         {showSql && (
-          <pre className="bg-gray-950/60 border border-gray-800/40 rounded-lg p-3 text-xs text-gray-400 overflow-x-auto whitespace-pre-wrap leading-relaxed">
+          <pre style={{ background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, fontSize: 11, color: 'var(--text-secondary)', overflow: 'auto', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
             {SUPABASE_SCHEMA.trim()}
           </pre>
         )}
-      </div>
+      </Section>
 
-      {/* About */}
-      <div className="text-center text-xs text-gray-600 space-y-0.5">
+      <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.8 }}>
         <p>Kingdom OS · Kingdom Seekers Ministry</p>
         <p>Accra & Cape Coast, Ghana · Est. December 2021</p>
       </div>

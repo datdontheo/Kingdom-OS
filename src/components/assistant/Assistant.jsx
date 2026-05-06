@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { today, isOverdue, daysSince, inNext7Days } from '../../lib/utils'
-import { Send, Loader2, Bot } from 'lucide-react'
+import { scheduleReminder } from '../../hooks/useReminders'
+import { Send, Loader2, Bot, MessageCircle, CheckSquare, Bell, X, Check, Phone, Zap } from 'lucide-react'
 
+// ── System prompt ──────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are Kingdom OS — the personal ministry assistant of Theo, Founder and President of Kingdom Seekers Ministry (KSM). You know this ministry deeply and serve Theo as a trusted co-pilot in all things ministry. You are proactive, Kingdom-minded, and practically helpful.
 
 WHO THEO IS:
@@ -45,24 +47,29 @@ YOUR CORE RESPONSIBILITIES:
 8. ANNUAL PROGRAMME PROMPTING — Know preparation timelines and prompt at the right time.
 9. WEEKLY BRIEFING — Start of each week: who to connect with, what's coming up, what's overdue, a grounding scripture.
 
-TONE: Warm, direct, and practically helpful — like a trusted co-labourer who knows the weight of the call. Never make Theo feel behind or overwhelmed. Speak plainly. Anchor suggestions in Scripture naturally. Always bring things back to the vision: disciples made, Kingdom advancing, leaders growing. When in doubt ask a clarifying question rather than assuming.`
+TONE: Warm, direct, and practically helpful — like a trusted co-labourer who knows the weight of the call. Never make Theo feel behind or overwhelmed. Speak plainly. Anchor suggestions in Scripture naturally.
 
+ACTIONS — IMPORTANT:
+When you want to suggest a concrete action (sending a WhatsApp message, creating a task, or setting a reminder), append ONE action block at the very end of your response in EXACTLY this format:
+
+For WhatsApp: <ACTION>{"type":"send_whatsapp","to":"[Person Name]","phone":"[phone number if known from context, else empty string]","message":"[the message text to pre-fill]"}</ACTION>
+
+For a task: <ACTION>{"type":"create_task","title":"[task title]","category":"[Teaching|Admin|People|Vision|Events|Finance|Media]","priority":"[High|Medium|Low]","due_date":"[YYYY-MM-DD or empty string]","notes":"[brief context]"}</ACTION>
+
+For a reminder: <ACTION>{"type":"set_reminder","title":"[reminder title]","body":"[details]","due_at":"[ISO 8601 datetime e.g. 2026-05-10T08:00:00]","person":"[person name or empty]","whatsapp_message":"[optional message to send to yourself as reminder]"}</ACTION>
+
+Only append an action block when there is a specific, clear, actionable suggestion. Never output more than one action block per response. Do not explain the action block — just append it silently.`
+
+// ── Ministry context ───────────────────────────────────────────────
 async function fetchMinistryContext() {
   const todayStr = today()
-  const [
-    { data: people },
-    { data: tasks },
-    { data: events },
-    { data: milestones },
-    { data: projects },
-  ] = await Promise.all([
-    supabase.from('people').select('name, role, last_contact_date, follow_up_status, follow_up_due_date').neq('follow_up_status', 'No action needed'),
+  const [{ data: people }, { data: tasks }, { data: events }, { data: milestones }, { data: projects }] = await Promise.all([
+    supabase.from('people').select('name, role, phone_number, last_contact_date, follow_up_status, follow_up_due_date').neq('follow_up_status', 'No action needed'),
     supabase.from('tasks').select('title, category, priority, status, due_date, assigned_to').neq('status', 'Done'),
     supabase.from('teaching_calendar').select('event_name, date, venue, topic, preparation_status').gte('date', todayStr).order('date').limit(10),
     supabase.from('project_milestones').select('title, due_date, completed, vision_projects(name, owner)').eq('completed', false).order('due_date').limit(20),
     supabase.from('vision_projects').select('name, status, owner, target_date').neq('status', 'Complete'),
   ])
-
   const overdueFollowUps = (people || []).filter(p =>
     p.follow_up_due_date ? isOverdue(p.follow_up_due_date) :
     p.last_contact_date ? daysSince(p.last_contact_date) > 14 : false
@@ -71,10 +78,9 @@ async function fetchMinistryContext() {
   const upcomingEvents = (events || []).filter(e => inNext7Days(e.date))
   const overdueMilestones = (milestones || []).filter(m => m.due_date && isOverdue(m.due_date))
 
-  return `
-<ministry_context date="${todayStr}">
+  return `<ministry_context date="${todayStr}">
   <people_overdue_for_followup count="${overdueFollowUps.length}">
-    ${overdueFollowUps.map(p => `<person name="${p.name}" role="${p.role}" last_contact="${p.last_contact_date || 'unknown'}" days_since="${p.last_contact_date ? daysSince(p.last_contact_date) : 'unknown'}" />`).join('\n    ')}
+    ${overdueFollowUps.map(p => `<person name="${p.name}" role="${p.role}" phone="${p.phone_number || ''}" last_contact="${p.last_contact_date || 'unknown'}" days_since="${p.last_contact_date ? daysSince(p.last_contact_date) : 'unknown'}" />`).join('\n    ')}
   </people_overdue_for_followup>
   <upcoming_events_7_days count="${upcomingEvents.length}">
     ${upcomingEvents.map(e => `<event name="${e.event_name}" date="${e.date}" venue="${e.venue || ''}" topic="${e.topic || ''}" prep="${e.preparation_status}" />`).join('\n    ')}
@@ -91,29 +97,168 @@ async function fetchMinistryContext() {
 </ministry_context>`
 }
 
-function MessageBubble({ msg }) {
-  const isUser = msg.role === 'user'
+// ── Action parsing ─────────────────────────────────────────────────
+function parseAction(text) {
+  const match = text.match(/<ACTION>([\s\S]*?)<\/ACTION>/)
+  if (!match) return { text, action: null }
+  try {
+    return { text: text.replace(/<ACTION>[\s\S]*?<\/ACTION>/, '').trim(), action: JSON.parse(match[1]) }
+  } catch { return { text, action: null } }
+}
+
+// ── ActionCard ─────────────────────────────────────────────────────
+function ActionCard({ action, onDismiss }) {
+  const [done, setDone] = useState(false)
+  const [phone, setPhone] = useState(action.phone || '')
+  const [saving, setSaving] = useState(false)
+  const [showPhoneInput, setShowPhoneInput] = useState(false)
+
+  if (done) return null
+
+  async function approve() {
+    setSaving(true)
+    if (action.type === 'send_whatsapp') {
+      const num = phone.replace(/\D/g, '')
+      if (!num) { setShowPhoneInput(true); setSaving(false); return }
+      window.open(`https://wa.me/${num}?text=${encodeURIComponent(action.message)}`, '_blank')
+      setDone(true)
+    } else if (action.type === 'create_task') {
+      await supabase.from('tasks').insert({
+        title: action.title,
+        category: action.category || 'Admin',
+        priority: action.priority || 'Medium',
+        status: 'Not started',
+        due_date: action.due_date || null,
+        notes: action.notes || '',
+      })
+      setDone(true)
+    } else if (action.type === 'set_reminder') {
+      await scheduleReminder({
+        title: action.title,
+        body: action.body || '',
+        due_at: action.due_at,
+        whatsapp_message: action.whatsapp_message || null,
+      })
+      setDone(true)
+    }
+    setSaving(false)
+  }
+
+  const icons = { send_whatsapp: MessageCircle, create_task: CheckSquare, set_reminder: Bell }
+  const colors = { send_whatsapp: 'var(--accent-green)', create_task: 'var(--accent-blue)', set_reminder: 'var(--accent-amber)' }
+  const labels = { send_whatsapp: 'WhatsApp Message', create_task: 'Create Task', set_reminder: 'Set Reminder' }
+  const Icon = icons[action.type] || Zap
+  const color = colors[action.type] || 'var(--accent)'
+
   return (
-    <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
-      {!isUser && (
-        <div className="w-7 h-7 rounded-full bg-violet-900/60 border border-violet-700/40 flex items-center justify-center shrink-0 mt-1">
-          <Bot size={14} className="text-violet-300" />
+    <div className="action-card">
+      <div className="flex items-start gap-2 mb-2">
+        <Icon size={14} style={{ color, marginTop: 2, flexShrink: 0 }} />
+        <div className="flex-1 min-w-0">
+          <p style={{ fontSize: 11, fontWeight: 600, color, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+            Suggested Action · {labels[action.type]}
+          </p>
+          {action.type === 'send_whatsapp' && (
+            <>
+              <p style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>To: {action.to}</p>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.5 }}>{action.message}</p>
+              {showPhoneInput && (
+                <div className="flex gap-2 mt-2">
+                  <Phone size={14} style={{ color: 'var(--text-muted)', marginTop: 8, flexShrink: 0 }} />
+                  <input
+                    className="ksm-input"
+                    style={{ fontSize: 12, padding: '6px 10px' }}
+                    placeholder="Enter phone number (e.g. +233244123456)"
+                    value={phone}
+                    onChange={e => setPhone(e.target.value)}
+                  />
+                </div>
+              )}
+            </>
+          )}
+          {action.type === 'create_task' && (
+            <>
+              <p style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>{action.title}</p>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{action.category} · {action.priority} priority{action.due_date ? ` · Due ${action.due_date}` : ''}</p>
+            </>
+          )}
+          {action.type === 'set_reminder' && (
+            <>
+              <p style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>{action.title}</p>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{action.due_at?.replace('T', ' at ').substring(0, 16)}</p>
+              {action.body && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{action.body}</p>}
+            </>
+          )}
         </div>
-      )}
-      <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-        isUser
-          ? 'bg-violet-900/60 border border-violet-700/40 text-gray-100 rounded-tr-sm'
-          : 'bg-gray-800/80 border border-gray-700/40 text-gray-200 rounded-tl-sm'
-      }`}>
-        {msg.content.split('\n').map((line, i) => (
-          <span key={i}>{line}{i < msg.content.split('\n').length - 1 && <br />}</span>
-        ))}
+        <button onClick={onDismiss} style={{ color: 'var(--text-muted)', flexShrink: 0, padding: 2 }}>
+          <X size={14} />
+        </button>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={approve}
+          disabled={saving}
+          className="btn-primary"
+          style={{ fontSize: 12, padding: '6px 14px', background: color, boxShadow: 'none' }}
+        >
+          <span className="flex items-center gap-1.5">
+            <Check size={12} />
+            {action.type === 'send_whatsapp' ? 'Open WhatsApp' : action.type === 'create_task' ? 'Create Task' : 'Set Reminder'}
+          </span>
+        </button>
+        <button onClick={onDismiss} className="btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }}>Dismiss</button>
       </div>
     </div>
   )
 }
 
-const MAX_HISTORY = 40 // keep last 40 messages sent to AI to stay within token limits
+// ── Message bubble ─────────────────────────────────────────────────
+function MessageBubble({ msg, timestamp }) {
+  const isUser = msg.role === 'user'
+  const { text, action } = parseAction(msg.content)
+  const [actionDismissed, setActionDismissed] = useState(false)
+
+  return (
+    <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
+      {!isUser && (
+        <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-1"
+          style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-blue))', flexShrink: 0 }}>
+          <Bot size={13} color="#fff" strokeWidth={2} />
+        </div>
+      )}
+      <div style={{ maxWidth: '82%' }}>
+        <div
+          style={{
+            padding: '10px 14px',
+            borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+            fontSize: 14,
+            lineHeight: 1.6,
+            background: isUser ? 'linear-gradient(135deg, var(--accent), var(--accent-blue))' : 'var(--bg-card)',
+            border: isUser ? 'none' : '1px solid var(--border)',
+            color: isUser ? '#fff' : 'var(--text-primary)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+        >
+          {text.split('\n').map((line, i, arr) => (
+            <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
+          ))}
+        </div>
+        {action && !actionDismissed && (
+          <ActionCard action={action} onDismiss={() => setActionDismissed(true)} />
+        )}
+        {timestamp && (
+          <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, textAlign: isUser ? 'right' : 'left' }}>
+            {new Date(timestamp).toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' })}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Main component ─────────────────────────────────────────────────
+const MAX_HISTORY = 40
 
 export default function Assistant() {
   const [messages, setMessages] = useState([])
@@ -125,7 +270,6 @@ export default function Assistant() {
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
-  // Load API key and full message history from Supabase on mount
   useEffect(() => {
     async function init() {
       const [{ data: settings }, { data: history }] = await Promise.all([
@@ -133,7 +277,7 @@ export default function Assistant() {
         supabase.from('chat_messages').select('role, content, created_at').order('created_at', { ascending: true }),
       ])
       if (settings?.claude_api_key) setApiKey(settings.claude_api_key)
-      if (history?.length) setMessages(history.map(m => ({ role: m.role, content: m.content })))
+      if (history?.length) setMessages(history.map(m => ({ role: m.role, content: m.content, ts: m.created_at })))
     }
     init()
   }, [])
@@ -142,14 +286,12 @@ export default function Assistant() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Auto morning briefing — only if no history exists yet today
   useEffect(() => {
     if (apiKey && !briefingSent && messages.length === 0) {
-      const lastBriefingDate = sessionStorage.getItem('ksm_briefing_date')
-      const todayStr = today()
-      if (lastBriefingDate !== todayStr) {
+      const last = sessionStorage.getItem('ksm_briefing_date')
+      if (last !== today()) {
         sendMessage(null, true)
-        sessionStorage.setItem('ksm_briefing_date', todayStr)
+        sessionStorage.setItem('ksm_briefing_date', today())
         setBriefingSent(true)
       }
     }
@@ -170,19 +312,14 @@ export default function Assistant() {
 
   async function sendMessage(e, isBriefing = false) {
     if (e) e.preventDefault()
-    const userText = isBriefing
-      ? 'Give me my Kingdom OS morning briefing for today.'
-      : input.trim()
+    const userText = isBriefing ? 'Give me my Kingdom OS morning briefing for today.' : input.trim()
     if (!userText || loading) return
     if (!apiKey) {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: 'Please add your Groq API key in Settings to use the assistant.'
-      }])
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Please add your Groq API key in Settings to use the assistant.' }])
       return
     }
 
-    const userMsg = { role: 'user', content: userText }
+    const userMsg = { role: 'user', content: userText, ts: new Date().toISOString() }
     const newMessages = [...messages, userMsg]
     setMessages(newMessages)
     setInput('')
@@ -192,22 +329,15 @@ export default function Assistant() {
     try {
       const context = await fetchMinistryContext()
       const systemWithContext = SYSTEM_PROMPT + '\n\n' + context
-      // Send only the last MAX_HISTORY messages to avoid token overflow
-      const trimmed = newMessages.slice(-MAX_HISTORY)
+      const trimmed = newMessages.slice(-MAX_HISTORY).map(m => ({ role: m.role, content: m.content }))
 
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
           max_tokens: 1024,
-          messages: [
-            { role: 'system', content: systemWithContext },
-            ...trimmed,
-          ],
+          messages: [{ role: 'system', content: systemWithContext }, ...trimmed],
         }),
       })
 
@@ -217,14 +347,12 @@ export default function Assistant() {
       }
 
       const data = await response.json()
-      const assistantMsg = { role: 'assistant', content: data.choices[0].message.content }
+      const content = data.choices[0].message.content
+      const assistantMsg = { role: 'assistant', content, ts: new Date().toISOString() }
       setMessages(prev => [...prev, assistantMsg])
-      await saveMessage('assistant', assistantMsg.content)
+      await saveMessage('assistant', content)
     } catch (err) {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: `Error: ${err.message}. Please check your API key in Settings.`
-      }])
+      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}. Please check your API key in Settings.`, ts: new Date().toISOString() }])
     } finally {
       setLoading(false)
       inputRef.current?.focus()
@@ -232,43 +360,48 @@ export default function Assistant() {
   }
 
   return (
-    <div className="flex flex-col h-full max-h-[calc(100svh-0px)] md:max-h-svh">
+    <div className="flex flex-col" style={{ height: '100%', maxHeight: 'calc(100svh - 0px)' }}>
+
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-800/60 bg-gray-900/30 shrink-0 flex items-center justify-between">
+      <div className="flex items-center justify-between px-4 py-3 shrink-0"
+        style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)', backdropFilter: 'blur(16px)' }}>
         <div>
-          <h2 className="text-base font-semibold text-white">Kingdom OS Assistant</h2>
-          <p className="text-xs text-gray-500">Powered by Groq · KSM Ministry Co-Pilot</p>
+          <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>Kingdom OS Assistant</h2>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>Powered by Groq · KSM Co-Pilot</p>
         </div>
         {messages.length > 0 && (
-          <button
-            onClick={clearHistory}
-            disabled={clearing}
-            className="text-xs text-gray-500 hover:text-red-400 transition-colors px-2 py-1 rounded-lg hover:bg-gray-800"
-          >
-            {clearing ? 'Clearing…' : 'Clear history'}
+          <button onClick={clearHistory} disabled={clearing}
+            style={{ fontSize: 12, color: 'var(--text-muted)', padding: '4px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--accent-red)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+            {clearing ? 'Clearing…' : 'Clear'}
           </button>
         )}
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {messages.length === 0 && !loading && (
-          <div className="text-center py-12 text-gray-500">
-            <Bot size={32} className="mx-auto mb-3 text-violet-700" />
-            <p className="text-sm">Your ministry co-pilot is ready.</p>
-            {!apiKey && (
-              <p className="text-xs mt-2 text-amber-500">Add your Groq API key in Settings to begin.</p>
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
+            <div style={{ width: 52, height: 52, borderRadius: 16, background: 'linear-gradient(135deg, var(--accent-dim), rgba(96,165,250,0.1))', border: '1px solid var(--border-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <Zap size={24} style={{ color: 'var(--accent)' }} />
+            </div>
+            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Your ministry co-pilot is ready.</p>
+            {!apiKey ? (
+              <p style={{ fontSize: 12, color: 'var(--accent-amber)' }}>Add your Groq API key in Settings to begin.</p>
+            ) : (
+              <p style={{ fontSize: 12 }}>Ask anything about KSM — I'll suggest actions you can approve.</p>
             )}
           </div>
         )}
-        {messages.map((msg, i) => <MessageBubble key={i} msg={msg} />)}
+        {messages.map((msg, i) => <MessageBubble key={i} msg={msg} timestamp={msg.ts} />)}
         {loading && (
           <div className="flex gap-3">
-            <div className="w-7 h-7 rounded-full bg-violet-900/60 border border-violet-700/40 flex items-center justify-center shrink-0">
-              <Bot size={14} className="text-violet-300" />
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent), var(--accent-blue))', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Bot size={13} color="#fff" />
             </div>
-            <div className="bg-gray-800/80 border border-gray-700/40 rounded-2xl rounded-tl-sm px-4 py-3">
-              <Loader2 size={16} className="text-violet-400 animate-spin" />
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '18px 18px 18px 4px', padding: '12px 16px', backdropFilter: 'blur(12px)' }}>
+              <Loader2 size={16} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
             </div>
           </div>
         )}
@@ -276,37 +409,28 @@ export default function Assistant() {
       </div>
 
       {/* Input */}
-      <form onSubmit={sendMessage} className="px-4 py-3 border-t border-gray-800/60 bg-gray-900/30 shrink-0 mb-16 md:mb-0">
+      <form onSubmit={sendMessage} className="shrink-0 px-4 py-3 mb-16 md:mb-0"
+        style={{ borderTop: '1px solid var(--border)', background: 'var(--bg-surface)', backdropFilter: 'blur(16px)' }}>
         <div className="flex gap-2 items-end">
           <textarea
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                sendMessage(e)
-              }
-            }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(e) } }}
             placeholder="Ask anything about KSM…"
             rows={1}
-            className="flex-1 bg-gray-800/60 border border-gray-700/60 rounded-xl px-3 py-2.5 text-sm text-gray-100 placeholder-gray-600 resize-none focus:outline-none focus:border-violet-600/60 max-h-32"
-            style={{ height: 'auto' }}
-            onInput={e => {
-              e.target.style.height = 'auto'
-              e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px'
-            }}
+            className="ksm-input"
+            style={{ resize: 'none', maxHeight: 128, borderRadius: 14 }}
+            onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px' }}
           />
-          <button
-            type="submit"
-            disabled={!input.trim() || loading}
-            className="bg-violet-700 hover:bg-violet-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl p-2.5 transition-colors shrink-0"
-          >
+          <button type="submit" disabled={!input.trim() || loading} className="btn-primary" style={{ padding: '10px 12px', borderRadius: 12, flexShrink: 0 }}>
             <Send size={16} />
           </button>
         </div>
-        <p className="text-xs text-gray-600 mt-1.5">Enter to send · Shift+Enter for new line</p>
+        <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>Enter to send · Shift+Enter for new line</p>
       </form>
+
+      <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
     </div>
   )
 }

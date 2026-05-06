@@ -1,21 +1,19 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { formatDate, daysSince, isOverdue, FOLLOW_UP_STATUSES, today } from '../../lib/utils'
-import { Plus, X, ChevronDown, ChevronUp, Search } from 'lucide-react'
+import { formatDate, daysSince, isOverdue, FOLLOW_UP_STATUSES } from '../../lib/utils'
+import { Plus, X, ChevronDown, ChevronUp, Search, MessageCircle } from 'lucide-react'
 
-const EMPTY = {
-  name: '', role: '', last_contact_date: '', notes: '',
-  follow_up_status: 'Active', follow_up_due_date: ''
-}
+const EMPTY = { name: '', role: '', phone_number: '', last_contact_date: '', notes: '', follow_up_status: 'Active', follow_up_due_date: '' }
 
 function Badge({ text }) {
-  const colors = {
-    Active: 'bg-green-950/50 text-green-300 border-green-800/40',
-    Watching: 'bg-amber-950/50 text-amber-300 border-amber-800/40',
-    'No action needed': 'bg-gray-800/60 text-gray-400 border-gray-700/40',
+  const styles = {
+    Active: { color: 'var(--accent-green)', border: 'rgba(52,211,153,0.3)', bg: 'rgba(52,211,153,0.08)' },
+    Watching: { color: 'var(--accent-amber)', border: 'rgba(251,191,36,0.3)', bg: 'rgba(251,191,36,0.08)' },
+    'No action needed': { color: 'var(--text-muted)', border: 'var(--border)', bg: 'transparent' },
   }
+  const s = styles[text] || styles['No action needed']
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full border ${colors[text] || colors['No action needed']}`}>
+    <span className="badge" style={{ color: s.color, borderColor: s.border, background: s.bg }}>
       {text}
     </span>
   )
@@ -23,13 +21,13 @@ function Badge({ text }) {
 
 function Modal({ title, children, onClose }) {
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-end md:items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-gray-700/60 rounded-2xl w-full max-w-lg max-h-[90svh] overflow-y-auto">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800/60">
-          <h3 className="text-base font-semibold text-white">{title}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X size={18} /></button>
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-box">
+        <div className="modal-header">
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</h3>
+          <button onClick={onClose} style={{ color: 'var(--text-muted)' }}><X size={18} /></button>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className="modal-body">{children}</div>
       </div>
     </div>
   )
@@ -37,69 +35,46 @@ function Modal({ title, children, onClose }) {
 
 function Field({ label, children }) {
   return (
-    <div className="space-y-1.5">
-      <label className="text-xs text-gray-400 font-medium">{label}</label>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <label style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>{label}</label>
       {children}
     </div>
   )
 }
 
-const inputCls = 'w-full bg-gray-800/60 border border-gray-700/60 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-violet-600/60'
-const selectCls = inputCls + ' cursor-pointer'
-
 function PersonForm({ initial, onSave, onClose }) {
   const [form, setForm] = useState(initial || EMPTY)
   const [saving, setSaving] = useState(false)
-
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   async function save() {
     if (!form.name.trim()) return
     setSaving(true)
-    const payload = {
-      name: form.name.trim(),
-      role: form.role,
-      last_contact_date: form.last_contact_date || null,
-      notes: form.notes,
-      follow_up_status: form.follow_up_status,
-      follow_up_due_date: form.follow_up_due_date || null,
-    }
-    if (initial?.id) {
-      await supabase.from('people').update(payload).eq('id', initial.id)
-    } else {
-      await supabase.from('people').insert(payload)
-    }
+    const payload = { name: form.name.trim(), role: form.role, phone_number: form.phone_number || null, last_contact_date: form.last_contact_date || null, notes: form.notes, follow_up_status: form.follow_up_status, follow_up_due_date: form.follow_up_due_date || null }
+    if (initial?.id) await supabase.from('people').update(payload).eq('id', initial.id)
+    else await supabase.from('people').insert(payload)
     setSaving(false)
     onSave()
   }
 
   return (
-    <div className="space-y-4">
-      <Field label="Name *">
-        <input className={inputCls} value={form.name} onChange={e => set('name', e.target.value)} placeholder="Full name" />
-      </Field>
-      <Field label="Role / Relationship">
-        <input className={inputCls} value={form.role} onChange={e => set('role', e.target.value)} placeholder="e.g. Director of Finance, Pod Leader" />
-      </Field>
-      <Field label="Last Contact Date">
-        <input type="date" className={inputCls} value={form.last_contact_date} onChange={e => set('last_contact_date', e.target.value)} />
-      </Field>
-      <Field label="Follow-up Status">
-        <select className={selectCls} value={form.follow_up_status} onChange={e => set('follow_up_status', e.target.value)}>
-          {FOLLOW_UP_STATUSES.map(s => <option key={s}>{s}</option>)}
-        </select>
-      </Field>
-      <Field label="Follow-up Due Date">
-        <input type="date" className={inputCls} value={form.follow_up_due_date} onChange={e => set('follow_up_due_date', e.target.value)} />
-      </Field>
-      <Field label="Notes">
-        <textarea className={inputCls} rows={4} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Pastoral notes, context, prayer points…" />
-      </Field>
-      <div className="flex gap-2 pt-2">
-        <button onClick={onClose} className="flex-1 py-2 rounded-lg border border-gray-700 text-gray-400 text-sm hover:bg-gray-800">Cancel</button>
-        <button onClick={save} disabled={saving || !form.name.trim()} className="flex-1 py-2 rounded-lg bg-violet-700 hover:bg-violet-600 disabled:opacity-40 text-white text-sm font-medium">
-          {saving ? 'Saving…' : 'Save'}
-        </button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Field label="Name *"><input className="ksm-input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="Full name" /></Field>
+      <Field label="Role / Relationship"><input className="ksm-input" value={form.role} onChange={e => set('role', e.target.value)} placeholder="e.g. Director of Finance, Pod Leader" /></Field>
+      <Field label="WhatsApp / Phone Number"><input className="ksm-input" value={form.phone_number} onChange={e => set('phone_number', e.target.value)} placeholder="+233244123456" /></Field>
+      <Field label="Last Contact Date"><input type="date" className="ksm-input" value={form.last_contact_date} onChange={e => set('last_contact_date', e.target.value)} /></Field>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <Field label="Follow-up Status">
+          <select className="ksm-input" value={form.follow_up_status} onChange={e => set('follow_up_status', e.target.value)}>
+            {FOLLOW_UP_STATUSES.map(s => <option key={s}>{s}</option>)}
+          </select>
+        </Field>
+        <Field label="Follow-up Due Date"><input type="date" className="ksm-input" value={form.follow_up_due_date} onChange={e => set('follow_up_due_date', e.target.value)} /></Field>
+      </div>
+      <Field label="Notes"><textarea className="ksm-input" rows={4} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Pastoral notes, context, prayer points…" /></Field>
+      <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
+        <button onClick={onClose} className="btn-ghost" style={{ flex: 1 }}>Cancel</button>
+        <button onClick={save} disabled={saving || !form.name.trim()} className="btn-primary" style={{ flex: 1 }}>{saving ? 'Saving…' : 'Save'}</button>
       </div>
     </div>
   )
@@ -109,37 +84,53 @@ function PersonCard({ person, onEdit, onDelete }) {
   const [expanded, setExpanded] = useState(false)
   const ds = person.last_contact_date ? daysSince(person.last_contact_date) : null
   const overdue = person.follow_up_due_date ? isOverdue(person.follow_up_due_date) : (ds !== null && ds > 14)
+  const waLink = person.phone_number ? `https://wa.me/${person.phone_number.replace(/\D/g, '')}` : null
 
   return (
-    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl overflow-hidden">
-      <button className="w-full text-left px-4 py-3.5 flex items-start gap-3" onClick={() => setExpanded(!expanded)}>
+    <div className="glass-card" style={{ overflow: 'hidden', borderColor: overdue ? 'rgba(248,113,113,0.3)' : undefined }}>
+      <button className="w-full text-left" style={{ padding: '14px 16px', display: 'flex', alignItems: 'flex-start', gap: 12 }} onClick={() => setExpanded(!expanded)}>
+        {/* Avatar */}
+        <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, var(--accent-dim), rgba(96,165,250,0.1))', border: '1px solid var(--border-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>
+          {person.name.charAt(0).toUpperCase()}
+        </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-gray-100">{person.name}</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{person.name}</span>
             <Badge text={person.follow_up_status} />
-            {overdue && <span className="text-xs text-red-400">⚠ Follow-up overdue</span>}
+            {overdue && <span style={{ fontSize: 11, color: 'var(--accent-red)', fontWeight: 500 }}>⚠ Overdue</span>}
           </div>
-          <p className="text-xs text-gray-500 mt-0.5">{person.role || 'No role set'}</p>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{person.role || 'No role set'}</p>
           {person.last_contact_date && (
-            <p className="text-xs text-gray-600 mt-0.5">
-              Last contact {formatDate(person.last_contact_date)}
-              {ds !== null ? ` · ${ds}d ago` : ''}
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+              Last contact {formatDate(person.last_contact_date)}{ds !== null ? ` · ${ds}d ago` : ''}
             </p>
           )}
         </div>
-        {expanded ? <ChevronUp size={15} className="text-gray-500 mt-0.5 shrink-0" /> : <ChevronDown size={15} className="text-gray-500 mt-0.5 shrink-0" />}
+        <div className="flex items-center gap-2 shrink-0">
+          {waLink && (
+            <a href={waLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+              style={{ color: 'var(--accent-green)', padding: 4 }}
+              title="Open WhatsApp">
+              <MessageCircle size={16} />
+            </a>
+          )}
+          {expanded ? <ChevronUp size={15} style={{ color: 'var(--text-muted)' }} /> : <ChevronDown size={15} style={{ color: 'var(--text-muted)' }} />}
+        </div>
       </button>
       {expanded && (
-        <div className="px-4 pb-4 border-t border-gray-800/40">
+        <div style={{ padding: '0 16px 16px', borderTop: '1px solid var(--border)' }}>
+          {person.phone_number && (
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 12 }}>📞 {person.phone_number}</p>
+          )}
           {person.follow_up_due_date && (
-            <p className="text-xs text-amber-400 mt-3">Follow-up due: {formatDate(person.follow_up_due_date)}</p>
+            <p style={{ fontSize: 12, color: 'var(--accent-amber)', marginTop: 8 }}>Follow-up due: {formatDate(person.follow_up_due_date)}</p>
           )}
           {person.notes && (
-            <p className="text-sm text-gray-400 mt-3 leading-relaxed whitespace-pre-wrap">{person.notes}</p>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 12, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{person.notes}</p>
           )}
           <div className="flex gap-2 mt-4">
-            <button onClick={() => onEdit(person)} className="text-xs text-violet-400 hover:text-violet-300 px-3 py-1.5 rounded-lg border border-violet-800/40 hover:bg-violet-950/30">Edit</button>
-            <button onClick={() => onDelete(person.id)} className="text-xs text-red-400 hover:text-red-300 px-3 py-1.5 rounded-lg border border-red-900/40 hover:bg-red-950/30">Delete</button>
+            <button onClick={() => onEdit(person)} className="btn-ghost" style={{ fontSize: 12, padding: '6px 14px' }}>Edit</button>
+            <button onClick={() => onDelete(person.id)} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 10, border: '1px solid rgba(248,113,113,0.3)', color: 'var(--accent-red)', background: 'transparent', cursor: 'pointer' }}>Delete</button>
           </div>
         </div>
       )}
@@ -169,62 +160,50 @@ export default function People() {
   }
 
   const filtered = people.filter(p => {
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.role || '').toLowerCase().includes(search.toLowerCase())
+    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || (p.role || '').toLowerCase().includes(search.toLowerCase())
     const matchStatus = filterStatus === 'All' || p.follow_up_status === filterStatus
     return matchSearch && matchStatus
   })
 
   return (
-    <div className="max-w-2xl mx-auto px-4 pt-6 pb-10">
-      <div className="flex items-center justify-between mb-5">
+    <div style={{ maxWidth: 680, margin: '0 auto', padding: '24px 16px 40px' }}>
+      <div className="page-header">
         <div>
-          <h2 className="text-lg font-semibold text-white">People</h2>
-          <p className="text-xs text-gray-500 mt-0.5">Pastoral directory & follow-up tracker</p>
+          <h2 className="page-title">People</h2>
+          <p className="page-subtitle">Pastoral directory & follow-up tracker</p>
         </div>
-        <button onClick={() => setModal('new')} className="flex items-center gap-1.5 bg-violet-700 hover:bg-violet-600 text-white text-sm px-3 py-2 rounded-lg font-medium">
+        <button onClick={() => setModal('new')} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
           <Plus size={15} /> Add
         </button>
       </div>
 
-      <div className="flex gap-2 mb-4">
-        <div className="flex-1 relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input
-            className={inputCls + ' pl-8'}
-            placeholder="Search name or role…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+        <div style={{ flex: 1, position: 'relative' }}>
+          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input className="ksm-input" style={{ paddingLeft: 32 }} placeholder="Search name or role…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <select className="bg-gray-800/60 border border-gray-700/60 rounded-lg px-2 py-2 text-sm text-gray-300 focus:outline-none" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-          <option>All</option>
+        <select className="ksm-input" style={{ width: 'auto', minWidth: 140 }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+          <option value="All">All Status</option>
           {FOLLOW_UP_STATUSES.map(s => <option key={s}>{s}</option>)}
         </select>
       </div>
 
       {loading ? (
-        <p className="text-gray-500 text-sm text-center py-10">Loading…</p>
+        <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>Loading…</p>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">
-          <p className="text-sm">No people found.</p>
-          <button onClick={() => setModal('new')} className="text-violet-400 text-sm mt-2 hover:underline">Add your first person</button>
+        <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-muted)' }}>
+          <p style={{ fontSize: 14 }}>No people found.</p>
+          <button onClick={() => setModal('new')} style={{ color: 'var(--accent)', fontSize: 13, marginTop: 8, background: 'none', border: 'none', cursor: 'pointer' }}>Add your first person</button>
         </div>
       ) : (
-        <div className="space-y-2">
-          {filtered.map(p => (
-            <PersonCard key={p.id} person={p} onEdit={p => setModal(p)} onDelete={deletePerson} />
-          ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {filtered.map(p => <PersonCard key={p.id} person={p} onEdit={p => setModal(p)} onDelete={deletePerson} />)}
         </div>
       )}
 
       {modal && (
         <Modal title={modal === 'new' ? 'Add Person' : 'Edit Person'} onClose={() => setModal(null)}>
-          <PersonForm
-            initial={modal === 'new' ? null : modal}
-            onSave={() => { setModal(null); load() }}
-            onClose={() => setModal(null)}
-          />
+          <PersonForm initial={modal === 'new' ? null : modal} onSave={() => { setModal(null); load() }} onClose={() => setModal(null)} />
         </Modal>
       )}
     </div>
