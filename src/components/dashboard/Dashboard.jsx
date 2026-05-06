@@ -115,8 +115,7 @@ export default function Dashboard() {
 
       {/* Page Title */}
       <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, fontFamily: 'Nexa, sans-serif' }}>Dashboard</h1>
-        <p style={{ fontSize: 14, color: 'var(--text-muted)', fontFamily: 'Nexa, sans-serif' }}>Welcome back, {userName}</p>
+        <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Nexa, sans-serif' }}>Dashboard</h1>
       </div>
 
       {/* Stats Grid */}
@@ -127,61 +126,13 @@ export default function Dashboard() {
         <StatCard label="Pending Tasks" value={tasks.length} icon={Target} color="#ffa726" to="/tasks" />
       </div>
 
-      {/* Two Column Layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24, marginBottom: 32 }}>
-
-        {/* Left Column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-
-          {/* Ministry Hierarchy */}
-          <div>
-            <SectionHeader title="Ministry Hierarchy" />
-            {loading ? (
-              <EmptyState text="Loading..." />
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <HierarchyItem region="Cape Coast" items="1" />
-              </div>
-            )}
-          </div>
-
-        </div>
-
-        {/* Right Column - Quick Actions */}
-        <div>
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16, fontFamily: 'Nexa, sans-serif' }}>Quick Actions</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <QuickActionButton icon={Plus} label="Add New Member" to="/people" />
-            <QuickActionButton icon={Users} label="Pending Follow-ups" to="/people" />
-            <QuickActionButton icon={CheckSquare} label="Upcoming Meetings" to="/meetings" />
-          </div>
-        </div>
-
-      </div>
-
-      {/* Recent Reports */}
-      <div>
-        <SectionHeader title="Recent Reports" />
-        <div className="glass-card" style={{ padding: '32px', textAlign: 'center' }}>
-          <p style={{ fontSize: 14, color: 'var(--text-muted)', fontFamily: 'Nexa, sans-serif' }}>No reports yet.</p>
-        </div>
-      </div>
-
-      {/* Devotion Section */}
-      <div style={{ marginTop: 32, borderRadius: 12, overflow: 'hidden', background: '#7a5c08' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 24, color: 'white' }}>
-          <div className="flex items-center gap-3">
-            <Settings size={20} strokeWidth={2} />
-            <h2 style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Nexa, sans-serif' }}>Today's Devotion</h2>
-          </div>
-          <Link to="#" style={{ fontSize: 12, color: 'white', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }} className="hover:underline">
-            View All →
-          </Link>
-        </div>
-        <div style={{ padding: 24, background: 'var(--bg-card)' }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12, fontFamily: 'Nexa, sans-serif' }}>{scripture.text.substring(0, 30)}...</h3>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12, fontFamily: 'Nexa, sans-serif' }}>{scripture.ref}</p>
-          <p style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.6, fontFamily: 'Nexa, sans-serif' }}>Read today's scripture and devotional message to start your day with spiritual guidance.</p>
+      {/* Quick Actions */}
+      <div style={{ marginTop: 24 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16, fontFamily: 'Nexa, sans-serif' }}>Quick Actions</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 320 }}>
+          <QuickActionButton icon={Plus} label="Add New Member" to="/people" />
+          <QuickActionButton icon={Users} label="Pending Follow-ups" to="/people" />
+          <QuickActionButton icon={CheckSquare} label="Upcoming Meetings" to="/meetings" />
         </div>
       </div>
 
