@@ -2,188 +2,256 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { getDailyScripture } from '../../lib/scriptures'
-import { formatDate, isOverdue, inNext7Days, daysSince, today } from '../../lib/utils'
-import { Users, CheckSquare, Target, Settings, TrendingUp, MessageCircle, X, ExternalLink, Plus } from 'lucide-react'
+import { today, tomorrow, formatDate, formatDateTime, daysSince, prepStatusColor, memberIssueColor, leaderStatusColor } from '../../lib/utils'
+import {
+  Users, CheckSquare, AlertCircle, BookOpen, ChevronRight,
+  Bell, Target, Lightbulb, FileText, UserCircle
+} from 'lucide-react'
 
-function StatCard({ label, value, icon: Icon, color, to }) {
-  const content = (
-    <div className="glass-card flex flex-col gap-2" style={{ borderColor: color + '20' }}>
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500, fontFamily: 'Nexa, sans-serif' }}>{label}</span>
-          <p style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1, marginTop: 4, fontFamily: 'Nexa, sans-serif' }}>{value}</p>
-        </div>
-        {Icon && (
-          <div style={{ width: 40, height: 40, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: color + '15' }}>
-            <Icon size={20} style={{ color }} strokeWidth={2} />
+const FONT = 'Nexa, DM Sans, sans-serif'
+
+function Section({ icon: Icon, title, color, children, to }) {
+  return (
+    <div className="glass-card" style={{ padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 30, height: 30, borderRadius: 8, background: color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon size={15} style={{ color }} strokeWidth={2} />
           </div>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: FONT }}>{title}</h3>
+        </div>
+        {to && (
+          <Link to={to} style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600, fontFamily: FONT }}>
+            View all <ChevronRight size={13} />
+          </Link>
         )}
       </div>
-      {to ? <Link to={to} style={{ fontSize: 11, color: color, fontWeight: 600 }} className="hover:underline">View details →</Link> : null}
+      {children}
     </div>
   )
-  return content
 }
 
-function QuickActionButton({ icon: Icon, label, to }) {
+function EmptyRow({ text }) {
+  return <p style={{ fontSize: 13, color: 'var(--text-muted)', padding: '4px 0', fontFamily: FONT }}>{text}</p>
+}
+
+function Row({ primary, secondary, badge, badgeColor }) {
   return (
-    <Link to={to} className="glass-card flex items-center gap-3 p-4 hover:bg-[var(--bg-card-hover)]" style={{ textDecoration: 'none', color: 'inherit' }}>
-      <div style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent-dim)' }}>
-        <Icon size={18} style={{ color: 'var(--accent)' }} strokeWidth={2} />
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: FONT }}>{primary}</p>
+        {secondary && <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, fontFamily: FONT }}>{secondary}</p>}
       </div>
-      <span style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600, fontFamily: 'Nexa, sans-serif' }}>{label}</span>
-      <span style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>→</span>
-    </Link>
-  )
-}
-
-function SectionHeader({ title, to }) {
-  return (
-    <div className="flex items-center justify-between mb-3">
-      <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Nexa, sans-serif' }}>{title}</h2>
-      {to && (
-        <Link to={to} style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }} className="hover:underline">
-          View All →
-        </Link>
+      {badge && (
+        <span style={{ fontSize: 11, fontWeight: 600, color: badgeColor || 'var(--accent)', background: (badgeColor || 'var(--accent)') + '18', padding: '3px 8px', borderRadius: 6, flexShrink: 0, marginLeft: 8, fontFamily: FONT }}>
+          {badge}
+        </span>
       )}
-    </div>
-  )
-}
-
-function EmptyState({ text }) {
-  return <p style={{ color: 'var(--text-muted)', fontSize: 13, padding: '16px 0', textAlign: 'center', fontFamily: 'Nexa, sans-serif' }}>{text}</p>
-}
-
-function HierarchyItem({ region, items }) {
-  const [expanded, setExpanded] = useState(false)
-  return (
-    <div className="glass-card p-0">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-4 hover:bg-[var(--bg-card-hover)]"
-        style={{ textAlign: 'left', color: 'inherit', border: 'none', background: 'transparent', cursor: 'pointer' }}
-      >
-        <div className="flex items-center gap-3">
-          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'var(--accent)', fontWeight: 700 }}>
-            {region[0]}
-          </div>
-          <div>
-            <p style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600, fontFamily: 'Nexa, sans-serif' }}>{region}</p>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{items} mega pods · Leader: Unassigned</p>
-          </div>
-        </div>
-        <span style={{ color: 'var(--text-muted)', transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
-      </button>
     </div>
   )
 }
 
 export default function Dashboard() {
   const scripture = getDailyScripture()
-  const [people, setPeople] = useState([])
   const [tasks, setTasks] = useState([])
-  const [events, setEvents] = useState([])
-  const [milestones, setMilestones] = useState([])
+  const [meetings, setMeetings] = useState([])
+  const [teachings, setTeachings] = useState([])
+  const [leaders, setLeaders] = useState([])
+  const [urgentMembers, setUrgentMembers] = useState([])
+  const [reminders, setReminders] = useState([])
+  const [suggestions, setSuggestions] = useState([])
+  const [goals, setGoals] = useState([])
   const [loading, setLoading] = useState(true)
-  const [userName, setUserName] = useState('User')
 
-  async function load() {
-    const [{ data: s }, { data: p }, { data: t }, { data: e }, { data: m }] = await Promise.all([
-      supabase.from('settings').select('user_name').limit(1).single().catch(() => ({ data: null })),
-      supabase.from('people').select('*').limit(5),
-      supabase.from('tasks').select('*').limit(5),
-      supabase.from('teaching_calendar').select('*').gte('date', today()).limit(5),
-      supabase.from('project_milestones').select('*').limit(5),
-    ]).catch(() => [{ data: null }, { data: [] }, { data: [] }, { data: [] }, { data: [] }])
-    
-    if (s?.user_name) setUserName(s.user_name)
-    setPeople(p || [])
-    setTasks(t || [])
-    setEvents(e || [])
-    setMilestones(m || [])
-    setLoading(false)
+  useEffect(() => {
+    async function load() {
+      const todayStr = today()
+      const tomorrowStr = tomorrow()
+      const next7 = new Date()
+      next7.setDate(next7.getDate() + 7)
+      const next7Str = next7.toISOString().split('T')[0]
+
+      const results = await Promise.allSettled([
+        supabase.from('tasks').select('id, title, category, priority, due_date, status')
+          .neq('status', 'Done').lte('due_date', todayStr).order('due_date').limit(5),
+        supabase.from('meeting_notes').select('id, meeting_type, date, notes')
+          .gte('date', todayStr).lte('date', next7Str).order('date').limit(3),
+        supabase.from('teaching_calendar').select('id, event_name, date, venue, preparation_status')
+          .gte('date', todayStr).lte('date', next7Str).order('date').limit(3),
+        supabase.from('leaders').select('id, name, role, last_contact_date, follow_up_due_date, follow_up_status')
+          .neq('follow_up_status', 'No action needed').order('created_at').limit(5),
+        supabase.from('people').select('id, name, issue_status, last_contact_date')
+          .in('issue_status', ['Needs call', 'Escalated']).limit(3),
+        supabase.from('reminders').select('id, title, body, due_at, done')
+          .eq('done', false).lte('due_at', tomorrowStr + 'T23:59:59').order('due_at').limit(5),
+        supabase.from('assistant_suggestions').select('id, suggestion_type, title, description')
+          .eq('status', 'pending').order('created_at', { ascending: false }).limit(3),
+        supabase.from('goals').select('id, title, category, next_action, status')
+          .eq('status', 'Active').order('created_at').limit(4),
+      ])
+
+      const get = (i) => results[i].status === 'fulfilled' ? (results[i].value.data || []) : []
+
+      setTasks(get(0))
+      setMeetings(get(1))
+      setTeachings(get(2))
+      setLeaders(get(3))
+      setUrgentMembers(get(4))
+      setReminders(get(5))
+      setSuggestions(get(6))
+      setGoals(get(7))
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  const now = new Date()
+  const hour = now.getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  const dateLabel = now.toLocaleDateString('en-GH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+
+  const taskPriorityColor = (p) => p === 'High' ? '#ef5350' : p === 'Medium' ? '#ffa726' : '#9b9189'
+  const suggestionTypeColor = (t) => {
+    const map = { 'Task': '#5a9fd4', 'Reminder': '#ffa726', 'Meeting': '#8b5cf6', 'WhatsApp Message': '#22a355', 'Goal': '#22a355', 'Teaching Preparation': '#5a9fd4' }
+    return map[t] || 'var(--accent)'
   }
 
-  useEffect(() => { load() }, [])
-
-  const totalMembers = people.length
-  const activePods = 1
-  const avgAttendance = 27
-
   return (
-    <div style={{ padding: '32px 24px', maxWidth: '1400px', margin: '0 auto' }}>
+    <div style={{ padding: '24px 20px', maxWidth: 860, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-      {/* Page Title */}
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, fontFamily: 'Nexa, sans-serif' }}>Dashboard</h1>
-        <p style={{ fontSize: 14, color: 'var(--text-muted)', fontFamily: 'Nexa, sans-serif' }}>Welcome back, {userName}</p>
-      </div>
-
-      {/* Stats Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 32 }}>
-        <StatCard label="Total Members" value={totalMembers} icon={Users} color="#5a9fd4" to="/people" />
-        <StatCard label="Active Pods" value={activePods} icon={MessageCircle} color="#66bb6a" to="/projects" />
-        <StatCard label="Avg. Attendance" value={avgAttendance + '%'} icon={CheckSquare} color="#b89b38" to="/teaching" />
-        <StatCard label="Pending Tasks" value={tasks.length} icon={Target} color="#ffa726" to="/tasks" />
-      </div>
-
-      {/* Two Column Layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24, marginBottom: 32 }}>
-        
-        {/* Left Column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-
-          {/* Ministry Hierarchy */}
-          <div>
-            <SectionHeader title="Ministry Hierarchy" />
-            {loading ? (
-              <EmptyState text="Loading..." />
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <HierarchyItem region="Cape Coast" items="1" />
-              </div>
-            )}
-          </div>
-
-        </div>
-
-        {/* Right Column - Quick Actions */}
-        <div>
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16, fontFamily: 'Nexa, sans-serif' }}>Quick Actions</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <QuickActionButton icon={Plus} label="Add New Member" to="/people" />
-            <QuickActionButton icon={Users} label="Pending Follow-ups" to="/people" />
-            <QuickActionButton icon={CheckSquare} label="Upcoming Meetings" to="/meetings" />
-          </div>
-        </div>
-
-      </div>
-
-      {/* Recent Reports */}
+      {/* Greeting */}
       <div>
-        <SectionHeader title="Recent Reports" />
-        <div className="glass-card" style={{ padding: '32px', textAlign: 'center' }}>
-          <p style={{ fontSize: 14, color: 'var(--text-muted)', fontFamily: 'Nexa, sans-serif' }}>No reports yet.</p>
-        </div>
+        <h1 style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', fontFamily: FONT }}>Dashboard</h1>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 4, fontFamily: FONT }}>{greeting}, Theo · {dateLabel}</p>
       </div>
 
-      {/* Devotion Section */}
-      <div style={{ marginTop: 32, borderRadius: 12, overflow: 'hidden', background: 'linear-gradient(135deg, #b89b38, #d4a817)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 24, color: 'white' }}>
-          <div className="flex items-center gap-3">
-            <Settings size={20} strokeWidth={2} />
-            <h2 style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Nexa, sans-serif' }}>Today's Devotion</h2>
-          </div>
-          <Link to="#" style={{ fontSize: 12, color: 'white', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }} className="hover:underline">
-            View All →
-          </Link>
+      {/* Daily Scripture */}
+      <div className="glass-card" style={{ padding: 24, background: 'linear-gradient(135deg, rgba(184,155,56,0.07) 0%, rgba(184,155,56,0.02) 100%)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <BookOpen size={16} style={{ color: 'var(--accent)' }} strokeWidth={2} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: FONT }}>Daily Verse</span>
         </div>
-        <div style={{ padding: 24, background: 'var(--bg-card)' }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12, fontFamily: 'Nexa, sans-serif' }}>{scripture.text.substring(0, 30)}...</h3>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12, fontFamily: 'Nexa, sans-serif' }}>{scripture.ref}</p>
-          <p style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.6, fontFamily: 'Nexa, sans-serif' }}>Read today's scripture and devotional message to start your day with spiritual guidance.</p>
-        </div>
+        <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.65, fontFamily: FONT, fontStyle: 'italic' }}>"{scripture.text}"</p>
+        <p style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 700, marginTop: 10, fontFamily: FONT }}>{scripture.ref}</p>
       </div>
+
+      {/* 1. Today's Tasks */}
+      <Section icon={CheckSquare} title="Today's Tasks" color="#5a9fd4" to="/tasks">
+        {loading ? <EmptyRow text="Loading…" /> :
+          tasks.length === 0 ? <EmptyRow text="No tasks due today. You're all clear!" /> :
+          tasks.map((t, i) => (
+            <Row key={i}
+              primary={t.title}
+              secondary={t.category + (t.due_date ? ` · Due ${formatDate(t.due_date)}` : '')}
+              badge={t.priority}
+              badgeColor={taskPriorityColor(t.priority)}
+            />
+          ))
+        }
+      </Section>
+
+      {/* 2. Upcoming Meetings */}
+      <Section icon={FileText} title="Upcoming Meetings" color="#8b5cf6" to="/meetings">
+        {loading ? <EmptyRow text="Loading…" /> :
+          meetings.length === 0 ? <EmptyRow text="No meetings in the next 7 days." /> :
+          meetings.map((m, i) => (
+            <Row key={i}
+              primary={m.meeting_type}
+              secondary={formatDate(m.date)}
+              badge="Meeting"
+              badgeColor="#8b5cf6"
+            />
+          ))
+        }
+      </Section>
+
+      {/* 3. Upcoming Teachings */}
+      <Section icon={BookOpen} title="Upcoming Teachings" color="#22a355" to="/teachings">
+        {loading ? <EmptyRow text="Loading…" /> :
+          teachings.length === 0 ? <EmptyRow text="No teachings in the next 7 days." /> :
+          teachings.map((t, i) => (
+            <Row key={i}
+              primary={t.event_name}
+              secondary={`${formatDate(t.date)}${t.venue ? ' · ' + t.venue : ''}`}
+              badge={t.preparation_status || 'Not started'}
+              badgeColor={prepStatusColor(t.preparation_status)}
+            />
+          ))
+        }
+      </Section>
+
+      {/* 4. Leader Follow-Ups */}
+      <Section icon={Users} title="Leader Follow-Ups" color="#c4920a" to="/leaders">
+        {loading ? <EmptyRow text="Loading…" /> :
+          leaders.length === 0 ? <EmptyRow text="All leaders are up to date." /> :
+          leaders.map((l, i) => (
+            <Row key={i}
+              primary={l.name}
+              secondary={l.role + (l.last_contact_date ? ` · Last contact ${daysSince(l.last_contact_date)}d ago` : ' · Never contacted')}
+              badge={l.follow_up_status}
+              badgeColor={leaderStatusColor(l.follow_up_status)}
+            />
+          ))
+        }
+      </Section>
+
+      {/* 5. Urgent Members (conditional — only when someone needs attention) */}
+      {!loading && urgentMembers.length > 0 && (
+        <Section icon={UserCircle} title="Members Needing Attention" color="#ef5350" to="/members">
+          {urgentMembers.map((m, i) => (
+            <Row key={i}
+              primary={m.name}
+              secondary={m.last_contact_date ? `Last contact ${daysSince(m.last_contact_date)}d ago` : 'No contact recorded'}
+              badge={m.issue_status}
+              badgeColor={memberIssueColor(m.issue_status)}
+            />
+          ))}
+        </Section>
+      )}
+
+      {/* 6. Reminders */}
+      <Section icon={Bell} title="Reminders" color="#f97316" to="/reminders">
+        {loading ? <EmptyRow text="Loading…" /> :
+          reminders.length === 0 ? <EmptyRow text="No reminders due today." /> :
+          reminders.map((r, i) => (
+            <Row key={i}
+              primary={r.title}
+              secondary={r.body || formatDateTime(r.due_at)}
+              badge="Due"
+              badgeColor="#f97316"
+            />
+          ))
+        }
+      </Section>
+
+      {/* 7. Assistant Suggestions (conditional) */}
+      {!loading && suggestions.length > 0 && (
+        <Section icon={Lightbulb} title="Assistant Suggestions" color="#8b5cf6" to="/suggestions">
+          {suggestions.map((s, i) => (
+            <Row key={i}
+              primary={s.title}
+              secondary={s.description ? s.description.slice(0, 80) : s.suggestion_type}
+              badge={s.suggestion_type}
+              badgeColor={suggestionTypeColor(s.suggestion_type)}
+            />
+          ))}
+        </Section>
+      )}
+
+      {/* 8. Active Goals */}
+      <Section icon={Target} title="Active Goals" color="#22a355" to="/goals">
+        {loading ? <EmptyRow text="Loading…" /> :
+          goals.length === 0 ? <EmptyRow text="No active goals yet. Add one to stay focused!" /> :
+          goals.map((g, i) => (
+            <Row key={i}
+              primary={g.title}
+              secondary={g.next_action || g.category}
+              badge={g.category}
+              badgeColor="#22a355"
+            />
+          ))
+        }
+      </Section>
 
     </div>
   )

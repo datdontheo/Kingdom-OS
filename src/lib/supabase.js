@@ -115,4 +115,64 @@ create table if not exists meeting_action_items (
   status text default 'Not started',
   created_at timestamptz default now()
 );
+
+-- New tables for simplified daily ministry workflow
+
+create table if not exists leaders (
+  id uuid default gen_random_uuid() primary key,
+  name text not null,
+  role text,
+  phone_number text,
+  last_contact_date date,
+  follow_up_due_date date,
+  follow_up_status text default 'Active',
+  notes text,
+  created_at timestamptz default now()
+);
+
+create table if not exists goals (
+  id uuid default gen_random_uuid() primary key,
+  title text not null,
+  category text default 'Vision',
+  target_date date,
+  notes text,
+  next_action text,
+  status text default 'Active',
+  created_at timestamptz default now()
+);
+
+create table if not exists assistant_suggestions (
+  id uuid default gen_random_uuid() primary key,
+  suggestion_type text not null,
+  title text not null,
+  description text,
+  action_json jsonb,
+  related_person_name text,
+  related_meeting_id uuid references meeting_notes(id) on delete set null,
+  related_teaching_id uuid references teaching_calendar(id) on delete set null,
+  related_goal_id uuid references goals(id) on delete set null,
+  status text default 'pending',
+  created_at timestamptz default now(),
+  acted_on_at timestamptz
+);
+
+-- Alter existing tables to add new columns
+
+alter table people add column if not exists issue_status text default 'No issue';
+
+alter table teaching_calendar add column if not exists anchor_scripture text;
+alter table teaching_calendar add column if not exists supporting_scriptures text;
+alter table teaching_calendar add column if not exists main_summary text;
+alter table teaching_calendar add column if not exists outline text;
+alter table teaching_calendar add column if not exists discussion_questions text;
+alter table teaching_calendar add column if not exists prayer_points text;
+alter table teaching_calendar add column if not exists declarations text;
+alter table teaching_calendar add column if not exists content_ideas text;
+alter table teaching_calendar add column if not exists related_series text;
+
+alter table meeting_notes add column if not exists agenda text;
+
+alter table reminders add column if not exists related_meeting_id uuid references meeting_notes(id) on delete set null;
+alter table reminders add column if not exists related_teaching_id uuid references teaching_calendar(id) on delete set null;
+alter table reminders add column if not exists done boolean default false;
 `

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { today, isOverdue, daysSince, inNext7Days } from '../../lib/utils'
 import { scheduleReminder } from '../../hooks/useReminders'
+import { detectActionTriggers, buildTriggerHint, mapActionTypeToSuggestionType } from '../../lib/assistantUtils'
 import { Send, Loader2, Bot, MessageCircle, CheckSquare, Bell, X, Check, Phone, Zap } from 'lucide-react'
 
 // ── System prompt ──────────────────────────────────────────────────
@@ -50,60 +51,85 @@ YOUR CORE RESPONSIBILITIES:
 TONE: Warm, direct, and practically helpful — like a trusted co-labourer who knows the weight of the call. Never make Theo feel behind or overwhelmed. Speak plainly. Anchor suggestions in Scripture naturally.
 
 ACTIONS — IMPORTANT:
-When you want to suggest a concrete action (sending a WhatsApp message, creating a task, or setting a reminder), append ONE action block at the very end of your response in EXACTLY this format:
+When you have actionable suggestions, append a maximum of 3 ACTION blocks per response. If you have more than 3 suggestions, action the top 3 most important ones first, then at the end of your visible text say something like: "I also have 2 more actions I can set up — want me to continue?" Wait for Theo to say yes before outputting the next batch.
+
+Watch for these phrases and ALWAYS suggest relevant actions when you detect them:
+- "I need to", "we have to", "I should", "don't forget", "remind me", "follow up with", "check on" → create_task or set_reminder
+- "message/text/send/WhatsApp [name]" → send_whatsapp
+- "I'm teaching on", "I need to prepare a teaching", "sermon", "message notes", "outline" → teaching_prep
+- "goal", "I want to achieve", "long-term", "vision" → add_goal
+- "schedule a meeting", "let's plan", "can we meet" → schedule_meeting
 
 For WhatsApp: <ACTION>{"type":"send_whatsapp","to":"[Person Name]","phone":"[phone number if known from context, else empty string]","message":"[the message text to pre-fill]"}</ACTION>
 
-For a task: <ACTION>{"type":"create_task","title":"[task title]","category":"[Teaching|Admin|People|Vision|Events|Finance|Media]","priority":"[High|Medium|Low]","due_date":"[YYYY-MM-DD or empty string]","notes":"[brief context]"}</ACTION>
+For a task: <ACTION>{"type":"create_task","title":"[task title]","category":"[Teaching|Meeting|Follow-up|Admin|Event|Media|Finance|Prayer|Other]","priority":"[High|Medium|Low]","due_date":"[YYYY-MM-DD or empty string]","notes":"[brief context]"}</ACTION>
 
 For a reminder: <ACTION>{"type":"set_reminder","title":"[reminder title]","body":"[details]","due_at":"[ISO 8601 datetime e.g. 2026-05-10T08:00:00]","person":"[person name or empty]","whatsapp_message":"[optional message to send to yourself as reminder]"}</ACTION>
 
-Only append an action block when there is a specific, clear, actionable suggestion. Never output more than one action block per response. Do not explain the action block — just append it silently.`
+For a goal: <ACTION>{"type":"add_goal","title":"[goal title]","category":"[Vision|Discipleship|Events|Teaching|Leadership|Media|Other]","notes":"[brief context]","next_action":"[what is the next step]"}</ACTION>
+
+One ACTION block per distinct action. Do not explain the action blocks — just append them silently at the end.`
 
 // ── Ministry context ───────────────────────────────────────────────
 async function fetchMinistryContext() {
   const todayStr = today()
-  const [{ data: people }, { data: tasks }, { data: events }, { data: milestones }, { data: projects }] = await Promise.all([
-    supabase.from('people').select('name, role, phone_number, last_contact_date, follow_up_status, follow_up_due_date').neq('follow_up_status', 'No action needed'),
+  const next7 = new Date()
+  next7.setDate(next7.getDate() + 7)
+  const next7Str = next7.toISOString().split('T')[0]
+
+  const results = await Promise.allSettled([
+    supabase.from('leaders').select('name, role, phone_number, last_contact_date, follow_up_status, follow_up_due_date').neq('follow_up_status', 'No action needed'),
     supabase.from('tasks').select('title, category, priority, status, due_date, assigned_to').neq('status', 'Done'),
-    supabase.from('teaching_calendar').select('event_name, date, venue, topic, preparation_status').gte('date', todayStr).order('date').limit(10),
-    supabase.from('project_milestones').select('title, due_date, completed, vision_projects(name, owner)').eq('completed', false).order('due_date').limit(20),
-    supabase.from('vision_projects').select('name, status, owner, target_date').neq('status', 'Complete'),
+    supabase.from('teaching_calendar').select('event_name, date, venue, topic, preparation_status').gte('date', todayStr).lte('date', next7Str).order('date').limit(5),
+    supabase.from('goals').select('title, category, status, next_action').eq('status', 'Active').limit(5),
+    supabase.from('reminders').select('title, due_at').eq('status', 'pending').eq('done', false).lte('due_at', next7Str + 'T23:59:59').order('due_at').limit(5),
   ])
-  const overdueFollowUps = (people || []).filter(p =>
-    p.follow_up_due_date ? isOverdue(p.follow_up_due_date) :
-    p.last_contact_date ? daysSince(p.last_contact_date) > 14 : false
+
+  const get = (i) => results[i].status === 'fulfilled' ? (results[i].value.data || []) : []
+  const leaders = get(0)
+  const tasks = get(1)
+  const teachings = get(2)
+  const goals = get(3)
+  const reminders = get(4)
+
+  const overdueLeaders = leaders.filter(l =>
+    l.follow_up_due_date ? isOverdue(l.follow_up_due_date) :
+    l.last_contact_date ? daysSince(l.last_contact_date) > 14 : false
   )
-  const overdueTasks = (tasks || []).filter(t => t.due_date && isOverdue(t.due_date))
-  const upcomingEvents = (events || []).filter(e => inNext7Days(e.date))
-  const overdueMilestones = (milestones || []).filter(m => m.due_date && isOverdue(m.due_date))
+  const overdueTasks = tasks.filter(t => t.due_date && isOverdue(t.due_date))
+  const unpreparedTeachings = teachings.filter(t => t.preparation_status !== 'Ready' && t.preparation_status !== 'Taught')
 
   return `<ministry_context date="${todayStr}">
-  <people_overdue_for_followup count="${overdueFollowUps.length}">
-    ${overdueFollowUps.map(p => `<person name="${p.name}" role="${p.role}" phone="${p.phone_number || ''}" last_contact="${p.last_contact_date || 'unknown'}" days_since="${p.last_contact_date ? daysSince(p.last_contact_date) : 'unknown'}" />`).join('\n    ')}
-  </people_overdue_for_followup>
-  <upcoming_events_7_days count="${upcomingEvents.length}">
-    ${upcomingEvents.map(e => `<event name="${e.event_name}" date="${e.date}" venue="${e.venue || ''}" topic="${e.topic || ''}" prep="${e.preparation_status}" />`).join('\n    ')}
-  </upcoming_events_7_days>
+  <leaders_overdue_for_followup count="${overdueLeaders.length}">
+    ${overdueLeaders.map(l => `<leader name="${l.name}" role="${l.role || ''}" phone="${l.phone_number || ''}" last_contact="${l.last_contact_date || 'unknown'}" days_since="${l.last_contact_date ? daysSince(l.last_contact_date) : 'unknown'}" status="${l.follow_up_status}" />`).join('\n    ')}
+  </leaders_overdue_for_followup>
+  <upcoming_teachings_7_days count="${teachings.length}">
+    ${teachings.map(t => `<teaching title="${t.event_name}" date="${t.date}" venue="${t.venue || ''}" topic="${t.topic || ''}" prep="${t.preparation_status}" />`).join('\n    ')}
+  </upcoming_teachings_7_days>
+  <unprepared_teachings count="${unpreparedTeachings.length}">
+    ${unpreparedTeachings.map(t => `<teaching title="${t.event_name}" date="${t.date}" prep_status="${t.preparation_status}" />`).join('\n    ')}
+  </unprepared_teachings>
   <overdue_tasks count="${overdueTasks.length}">
-    ${overdueTasks.map(t => `<task title="${t.title}" category="${t.category}" priority="${t.priority}" due="${t.due_date}" assigned_to="${t.assigned_to || 'unassigned'}" />`).join('\n    ')}
+    ${overdueTasks.map(t => `<task title="${t.title}" category="${t.category}" priority="${t.priority}" due="${t.due_date}" />`).join('\n    ')}
   </overdue_tasks>
-  <overdue_milestones count="${overdueMilestones.length}">
-    ${overdueMilestones.map(m => `<milestone title="${m.title}" due="${m.due_date}" project="${m.vision_projects?.name || ''}" owner="${m.vision_projects?.owner || ''}" />`).join('\n    ')}
-  </overdue_milestones>
-  <active_projects count="${(projects || []).length}">
-    ${(projects || []).map(p => `<project name="${p.name}" status="${p.status}" owner="${p.owner || ''}" target="${p.target_date || ''}" />`).join('\n    ')}
-  </active_projects>
+  <active_goals count="${goals.length}">
+    ${goals.map(g => `<goal title="${g.title}" category="${g.category}" next_action="${g.next_action || ''}" />`).join('\n    ')}
+  </active_goals>
+  <upcoming_reminders count="${reminders.length}">
+    ${reminders.map(r => `<reminder title="${r.title}" due="${r.due_at}" />`).join('\n    ')}
+  </upcoming_reminders>
 </ministry_context>`
 }
 
 // ── Action parsing ─────────────────────────────────────────────────
-function parseAction(text) {
-  const match = text.match(/<ACTION>([\s\S]*?)<\/ACTION>/)
-  if (!match) return { text, action: null }
-  try {
-    return { text: text.replace(/<ACTION>[\s\S]*?<\/ACTION>/, '').trim(), action: JSON.parse(match[1]) }
-  } catch { return { text, action: null } }
+function parseActions(text) {
+  const matches = [...text.matchAll(/<ACTION>([\s\S]*?)<\/ACTION>/g)]
+  const actions = []
+  for (const match of matches) {
+    try { actions.push(JSON.parse(match[1])) } catch {}
+  }
+  const cleanText = text.replace(/<ACTION>[\s\S]*?<\/ACTION>/g, '').trim()
+  return { text: cleanText, actions }
 }
 
 // ── ActionCard ─────────────────────────────────────────────────────
@@ -215,8 +241,8 @@ function ActionCard({ action, onDismiss }) {
 // ── Message bubble ─────────────────────────────────────────────────
 function MessageBubble({ msg, timestamp }) {
   const isUser = msg.role === 'user'
-  const { text, action } = parseAction(msg.content)
-  const [actionDismissed, setActionDismissed] = useState(false)
+  const { text, actions } = parseActions(msg.content)
+  const [dismissed, setDismissed] = useState([])
 
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
@@ -236,16 +262,16 @@ function MessageBubble({ msg, timestamp }) {
             background: isUser ? 'linear-gradient(135deg, var(--accent), var(--accent-blue))' : 'var(--bg-card)',
             border: isUser ? 'none' : '1px solid var(--border)',
             color: isUser ? '#fff' : 'var(--text-primary)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
           }}
         >
           {text.split('\n').map((line, i, arr) => (
             <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
           ))}
         </div>
-        {action && !actionDismissed && (
-          <ActionCard action={action} onDismiss={() => setActionDismissed(true)} />
+        {actions.map((action, i) =>
+          !dismissed.includes(i) && (
+            <ActionCard key={i} action={action} onDismiss={() => setDismissed(prev => [...prev, i])} />
+          )
         )}
         {timestamp && (
           <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, textAlign: isUser ? 'right' : 'left' }}>
@@ -310,6 +336,19 @@ export default function Assistant() {
     setClearing(false)
   }
 
+  async function saveActionsAsSuggestions(actions) {
+    if (!actions.length) return
+    const rows = actions.map(action => ({
+      suggestion_type: mapActionTypeToSuggestionType(action.type),
+      title: action.title || action.to || action.message?.slice(0, 80) || 'Suggestion',
+      description: action.message || action.notes || action.body || null,
+      action_json: action,
+      related_person_name: action.to || action.person || null,
+      status: 'pending',
+    }))
+    await supabase.from('assistant_suggestions').insert(rows)
+  }
+
   async function sendMessage(e, isBriefing = false) {
     if (e) e.preventDefault()
     const userText = isBriefing ? 'Give me my Kingdom OS morning briefing for today.' : input.trim()
@@ -328,7 +367,9 @@ export default function Assistant() {
 
     try {
       const context = await fetchMinistryContext()
-      const systemWithContext = SYSTEM_PROMPT + '\n\n' + context
+      const triggers = isBriefing ? [] : detectActionTriggers(userText)
+      const triggerHint = buildTriggerHint(triggers)
+      const systemWithContext = SYSTEM_PROMPT + '\n\n' + context + triggerHint
       const trimmed = newMessages.slice(-MAX_HISTORY).map(m => ({ role: m.role, content: m.content }))
 
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -336,7 +377,7 @@ export default function Assistant() {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
-          max_tokens: 1024,
+          max_tokens: 3000,
           messages: [{ role: 'system', content: systemWithContext }, ...trimmed],
         }),
       })
@@ -351,6 +392,12 @@ export default function Assistant() {
       const assistantMsg = { role: 'assistant', content, ts: new Date().toISOString() }
       setMessages(prev => [...prev, assistantMsg])
       await saveMessage('assistant', content)
+
+      // Save extracted actions as suggestions for the Suggestions module
+      const { actions } = parseActions(content)
+      if (actions.length > 0) {
+        saveActionsAsSuggestions(actions).catch(() => {})
+      }
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}. Please check your API key in Settings.`, ts: new Date().toISOString() }])
     } finally {
