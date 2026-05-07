@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { today, isOverdue, daysSince, inNext7Days } from '../../lib/utils'
 import { scheduleReminder } from '../../hooks/useReminders'
-import { detectActionTriggers, buildTriggerHint, mapActionTypeToSuggestionType } from '../../lib/assistantUtils'
+import { detectActionTriggers, buildTriggerHint, mapActionTypeToSuggestionType, generateCheckInQuestions } from '../../lib/assistantUtils'
 import { Send, Loader2, Bot, MessageCircle, CheckSquare, Bell, X, Check, Phone, Zap } from 'lucide-react'
 
 // ── System prompt ──────────────────────────────────────────────────
@@ -49,6 +49,13 @@ YOUR CORE RESPONSIBILITIES:
 9. WEEKLY BRIEFING — Start of each week: who to connect with, what's coming up, what's overdue, a grounding scripture.
 
 TONE: Warm, direct, and practically helpful — like a trusted co-labourer who knows the weight of the call. Never make Theo feel behind or overwhelmed. Speak plainly. Anchor suggestions in Scripture naturally.
+
+CHECK-IN QUESTIONS:
+When you start a briefing (especially in morning briefings), surface 1-3 proactive check-in questions based on what's overdue or at-risk:
+- "Have you followed up with [Leader] in X days?" (if >14 days overdue)
+- "How's prep going for [Teaching] — you have X days left" (if unprepared and <7 days away)
+- "Should we tackle your overdue tasks today?" (if tasks are overdue)
+Ask these naturally in conversation, not as a list. Make Theo feel supported, not judged.
 
 PRIORITY FILTERING — CRITICAL:
 Follow this strict priority order when suggesting actions:
@@ -416,8 +423,19 @@ export default function Assistant() {
       const context = await fetchMinistryContext()
       const triggers = isBriefing ? [] : detectActionTriggers(userText)
       const triggerHint = buildTriggerHint(triggers)
-      const systemWithContext = SYSTEM_PROMPT + '\n\n' + context + triggerHint
-      const trimmed = newMessages.slice(-MAX_HISTORY).map(m => ({ role: m.role, content: m.content.slice(0, 1200) }))
+
+      let systemWithContext = SYSTEM_PROMPT + '\n\n' + context + triggerHint
+
+      // Add check-in questions hint for briefings
+      if (isBriefing) {
+        const checkInQs = generateCheckInQuestions(context)
+        if (checkInQs.length > 0) {
+          const qsText = checkInQs.map(q => `- ${q.text}`).join('\n')
+          systemWithContext += `\n\n[CHECK-IN QUESTIONS TO ASK]: Answer and address these proactively in your briefing:\n${qsText}`
+        }
+      }
+
+      const trimmed = newMessages.slice(-MAX_HISTORY).map(m => ({ role: m.role, content: m.content }))
 
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
