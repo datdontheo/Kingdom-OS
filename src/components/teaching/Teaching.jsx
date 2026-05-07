@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { formatDate, isOverdue, PREP_STATUSES, prepStatusColor, today } from '../../lib/utils'
-import { Plus, X, ChevronDown, ChevronUp, BookOpen, Loader2, Save } from 'lucide-react'
+import { Plus, X, ChevronDown, ChevronUp, BookOpen, Loader2, Save, Zap } from 'lucide-react'
+import TeachingPrepWorkflow from './TeachingPrepWorkflow'
 
 const FONT = 'Nexa, DM Sans, sans-serif'
 const VENUES = ['Monthly Saturday Gathering', '4am Teaching Line', 'External Church', 'Cape Coast Gathering', 'Doers of the Word', 'Worship Jesus', 'Prayer Chain', 'Online / Zoom', 'Other']
@@ -179,7 +180,7 @@ function AIPrepPanel({ event, apiKey, onSaved }) {
   )
 }
 
-function EventCard({ event, onEdit, onDelete, apiKey, onRefresh }) {
+function EventCard({ event, onEdit, onDelete, apiKey, onRefresh, onPrepWorkflow }) {
   const [expanded, setExpanded] = useState(false)
   const isPast = isOverdue(event.date)
   const statusColor = prepStatusColor(event.preparation_status)
@@ -257,7 +258,11 @@ function EventCard({ event, onEdit, onDelete, apiKey, onRefresh }) {
             )}
           </div>
 
-          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+          <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+            <button onClick={() => onPrepWorkflow(event)}
+              style={{ fontSize: 12, fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg, #22a355, #1d8c47)', border: 'none', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontFamily: FONT, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Zap size={12} /> Start Prep
+            </button>
             <button onClick={() => onEdit(event)}
               style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-dim)', border: 'none', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontFamily: FONT }}>Edit</button>
             <button onClick={() => onDelete(event.id)}
@@ -277,6 +282,7 @@ export default function Teaching() {
   const [modal, setModal] = useState(null)
   const [showPast, setShowPast] = useState(false)
   const [apiKey, setApiKey] = useState('')
+  const [prepWorkflow, setPrepWorkflow] = useState(null)
 
   async function load() {
     const { data } = await supabase.from('teaching_calendar').select('*').order('date', { ascending: true })
@@ -323,7 +329,7 @@ export default function Teaching() {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {upcoming.map(e => <EventCard key={e.id} event={e} onEdit={e => setModal(e)} onDelete={deleteEvent} apiKey={apiKey} onRefresh={load} />)}
+              {upcoming.map(e => <EventCard key={e.id} event={e} onEdit={e => setModal(e)} onDelete={deleteEvent} apiKey={apiKey} onRefresh={load} onPrepWorkflow={e => setPrepWorkflow(e)} />)}
             </div>
           )}
 
@@ -334,7 +340,7 @@ export default function Teaching() {
               </button>
               {showPast && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {[...past].reverse().map(e => <EventCard key={e.id} event={e} onEdit={e => setModal(e)} onDelete={deleteEvent} apiKey={apiKey} onRefresh={load} />)}
+                  {[...past].reverse().map(e => <EventCard key={e.id} event={e} onEdit={e => setModal(e)} onDelete={deleteEvent} apiKey={apiKey} onRefresh={load} onPrepWorkflow={e => setPrepWorkflow(e)} />)}
                 </div>
               )}
             </div>
@@ -354,6 +360,14 @@ export default function Teaching() {
             </div>
           </div>
         </div>
+      )}
+
+      {prepWorkflow && (
+        <TeachingPrepWorkflow
+          teaching={prepWorkflow}
+          onClose={() => setPrepWorkflow(null)}
+          onSave={() => { setPrepWorkflow(null); load() }}
+        />
       )}
     </div>
   )
