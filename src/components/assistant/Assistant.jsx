@@ -73,13 +73,14 @@ When you have actionable suggestions, append a maximum of 3 ACTION blocks per re
 
 CONTACT LOOKUP — CRITICAL FOR MESSAGING:
 The ministry context includes a <contacts_directory> with all leaders and members' names and phone numbers.
-WHENEVER Theo mentions a person by name (e.g., "message John", "text Sarah", "contact Pastor Mike", "remind me to call David"):
-1. IMMEDIATELY look up that person's name in the <contacts_directory>
-2. Extract their phone number exactly as listed
-3. Include the phone number in your send_whatsapp ACTION
-4. If the name is not found, leave the phone field empty and the user can add it manually
+WHENEVER Theo mentions a person by name (e.g., "message Ken", "text Sarah", "contact Pastor Mike"):
+1. SCAN the <contacts_directory> and find the EXACT matching name entry
+2. Use the EXACT name attribute value from the matching <contact> entry — do NOT guess or approximate
+3. Extract the phone number from that same entry and copy it EXACTLY
+4. Include both the exact name and phone in your send_whatsapp ACTION
+5. If no exact match is found, leave the phone empty — the user will add it manually
 
-Example: If Theo says "message the VP", search contacts for names with "VP" or find the Vice-President's name in the contacts list, then generate the action with their phone number filled in.
+IMPORTANT: Match the name EXACTLY as it appears in the directory. If Theo says "Ken", find the contact with name="Ken" (or "Kenneth", if that's what's stored). Do NOT substitute similar names.
 
 Watch for these phrases and ALWAYS suggest relevant actions when you detect them:
 - "I need to", "we have to", "I should", "don't forget", "remind me", "follow up with", "check on" → create_task or set_reminder
@@ -211,23 +212,21 @@ function parseActions(text) {
 // ── ActionCard ─────────────────────────────────────────────────────
 function lookupPhone(name, contacts) {
   if (!name || !contacts) return ''
-  const lower = name.toLowerCase().trim()
+  const searchLower = name.toLowerCase().trim()
 
-  // Exact match (fastest)
-  if (contacts[lower]) return contacts[lower]
+  // 1. Try exact match first
+  if (contacts[searchLower]) return contacts[searchLower]
 
-  // Partial match (either contains the search, or the search contains it)
+  // 2. Try exact match on first word (e.g., "John" from input finds "john smith" in contacts)
+  const firstWord = searchLower.split(/\s+/)[0]
   for (const [key, val] of Object.entries(contacts)) {
-    if (key === lower) return val
-    if (key.includes(lower) || lower.includes(key)) return val
+    const keyFirstWord = key.split(/\s+/)[0]
+    if (firstWord === keyFirstWord) return val
   }
 
-  // Try word-based matching (e.g., searching "John" finds "John Smith")
-  const words = lower.split(/\s+/)
-  for (const word of words) {
-    for (const [key, val] of Object.entries(contacts)) {
-      if (key.includes(word)) return val
-    }
+  // 3. Last resort: partial match only if it's a strong match
+  for (const [key, val] of Object.entries(contacts)) {
+    if (key === searchLower) return val
   }
 
   return ''
@@ -421,11 +420,15 @@ export default function Assistant() {
       if (settings?.claude_api_key) setApiKey(settings.claude_api_key)
       if (history?.length) setMessages(history.map(m => ({ role: m.role, content: m.content, ts: m.created_at })))
 
-      // Build contacts lookup: lowercase name → phone number
+      // Build contacts lookup: support both exact and lowercase name matching
       const contactMap = {}
       ;[...(leaderData || []), ...(memberData || [])].forEach(c => {
         if (c.name && c.phone_number) {
-          contactMap[c.name.toLowerCase().trim()] = c.phone_number
+          const trimmed = c.name.trim()
+          const lower = trimmed.toLowerCase()
+          // Support both exact name and lowercase for matching
+          contactMap[trimmed] = c.phone_number
+          contactMap[lower] = c.phone_number
         }
       })
       setContacts(contactMap)
