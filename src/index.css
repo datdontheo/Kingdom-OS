@@ -267,7 +267,7 @@ body {
   background: linear-gradient(135deg, var(--accent-dim), rgba(90,159,212,0.05));
   border: 1px solid var(--border-glow);
   border-radius: 12px;
-  padding: 12px 14px;
+  padding: 14px 16px;
   margin-top: 8px;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
