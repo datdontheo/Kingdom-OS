@@ -245,14 +245,14 @@ function MessageBubble({ msg, timestamp }) {
   const [dismissed, setDismissed] = useState([])
 
   return (
-    <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
+    <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`} style={{ width: '100%', minWidth: 0 }}>
       {!isUser && (
         <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-1"
           style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-blue))', flexShrink: 0 }}>
           <Bot size={13} color="#fff" strokeWidth={2} />
         </div>
       )}
-      <div style={{ maxWidth: '82%' }}>
+      <div style={{ maxWidth: '82%', minWidth: 0, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
         <div
           style={{
             padding: '10px 14px',
@@ -407,7 +407,7 @@ export default function Assistant() {
   }
 
   return (
-    <div className="assistant-root flex flex-col" style={{ flex: 1, minHeight: 0 }}>
+    <div className="assistant-root flex flex-col" style={{ flex: 1, minHeight: 0, overflow: 'hidden', width: '100%' }}>
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 shrink-0"
@@ -427,7 +427,7 @@ export default function Assistant() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4" style={{ display: 'flex', flexDirection: 'column', gap: 16, overscrollBehavior: 'contain' }}>
         {messages.length === 0 && !loading && (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
             <div style={{ width: 52, height: 52, borderRadius: 16, background: 'linear-gradient(135deg, var(--accent-dim), rgba(96,165,250,0.1))', border: '1px solid var(--border-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
