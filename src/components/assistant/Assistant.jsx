@@ -196,7 +196,8 @@ END OF CONTACTS TABLE
 
 // ── Action parsing ─────────────────────────────────────────────────
 function parseActions(text) {
-  const actionMatches = [...text.matchAll(/<ACTION>([\s\S]*?)<\/ACTION>/g)]
+  // Tolerate AI output variations: <ACTION>{...}</ACTION>, <ACTION={...}></ACTION>, <ACTION>{...}>
+  const actionMatches = [...text.matchAll(/<ACTION=?>?(\{[\s\S]*?\})>?<\/?ACTION>?/g)]
   const actions = []
 
   for (const match of actionMatches) {
@@ -212,7 +213,10 @@ function parseActions(text) {
     } catch {}
   }
 
-  const cleanText = text.replace(/<PRIORITY>[\s\S]*?<\/PRIORITY>/g, '').replace(/<ACTION>[\s\S]*?<\/ACTION>/g, '').trim()
+  const cleanText = text
+    .replace(/<PRIORITY>[\s\S]*?<\/PRIORITY>/g, '')
+    .replace(/<ACTION=?>?[\s\S]*?<\/?ACTION>?/g, '')
+    .trim()
   return { text: cleanText, actions }
 }
 
@@ -239,12 +243,32 @@ function lookupPhone(name, contacts) {
   return ''
 }
 
-function ActionCard({ action, onDismiss, contacts = {} }) {
-  const resolvedPhone = action.phone || lookupPhone(action.to, contacts)
+function findContactMatches(searchName, contactList) {
+  if (!searchName || !contactList?.length) return []
+  const search = searchName.toLowerCase().trim()
+  const searchWords = search.split(/\s+/).filter(Boolean)
+  return contactList.filter(c => {
+    const cn = c.name.toLowerCase()
+    if (cn === search) return true
+    if (cn.includes(search) || search.includes(cn)) return true
+    return searchWords.some(w => cn.includes(w))
+  })
+}
+
+function ActionCard({ action, onDismiss, contacts = {}, contactList = [] }) {
+  const initialPhone = action.phone || lookupPhone(action.to, contacts)
+  const matches = findContactMatches(action.to, contactList)
+  // Auto-resolve: if AI sent no phone but exactly one contact matches, use it
+  const autoResolved = !initialPhone && matches.length === 1 ? matches[0].phone : ''
+  const resolvedPhone = initialPhone || autoResolved
+  const resolvedName = autoResolved ? matches[0].name : action.to
+
   const [done, setDone] = useState(false)
   const [phone, setPhone] = useState(resolvedPhone)
+  const [selectedName, setSelectedName] = useState(resolvedName)
   const [saving, setSaving] = useState(false)
-  const [showPhoneInput, setShowPhoneInput] = useState(!resolvedPhone && action.type === 'send_whatsapp')
+  const [showPicker, setShowPicker] = useState(!resolvedPhone && action.type === 'send_whatsapp')
+  const [showManualInput, setShowManualInput] = useState(false)
 
   if (done) return null
 
@@ -294,15 +318,47 @@ function ActionCard({ action, onDismiss, contacts = {} }) {
           {action.type === 'send_whatsapp' && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <p style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>To: {action.to}</p>
-                {phone && !showPhoneInput && (
+                <p style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>To: {selectedName}</p>
+                {phone && !showPicker && !showManualInput && (
                   <span style={{ fontSize: 11, color: 'var(--accent-green)', background: 'rgba(102,187,106,0.12)', padding: '2px 7px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
                     <Check size={10} /> {phone}
                   </span>
                 )}
               </div>
               <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.5 }}>{action.message}</p>
-              {showPhoneInput && (
+
+              {showPicker && (
+                <div style={{ marginTop: 8 }}>
+                  {matches.length > 0 ? (
+                    <>
+                      <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
+                        {matches.length === 1 ? 'Is this the right contact?' : `Pick a contact matching "${action.to}":`}
+                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 180, overflowY: 'auto' }}>
+                        {matches.map((c, i) => (
+                          <button
+                            key={i}
+                            onClick={() => { setPhone(c.phone); setSelectedName(c.name); setShowPicker(false); setShowManualInput(false) }}
+                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left', fontSize: 12 }}
+                          >
+                            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{c.name}{c.role ? ` · ${c.role}` : ''}</span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{c.phone}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <p style={{ fontSize: 11, color: 'var(--accent-amber)', marginBottom: 6 }}>
+                      No contact matching "{action.to}" found in Leaders or Members.
+                    </p>
+                  )}
+                  <button onClick={() => { setShowPicker(false); setShowManualInput(true) }} style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', marginTop: 6, padding: 0, textDecoration: 'underline' }}>
+                    Type number manually
+                  </button>
+                </div>
+              )}
+
+              {showManualInput && (
                 <div className="flex gap-2 mt-2">
                   <Phone size={14} style={{ color: 'var(--text-muted)', marginTop: 8, flexShrink: 0 }} />
                   <input
@@ -314,9 +370,10 @@ function ActionCard({ action, onDismiss, contacts = {} }) {
                   />
                 </div>
               )}
-              {phone && !showPhoneInput && (
-                <button onClick={() => setShowPhoneInput(true)} style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', marginTop: 2, padding: 0, textDecoration: 'underline' }}>
-                  Wrong number? Edit
+
+              {phone && !showPicker && !showManualInput && (
+                <button onClick={() => setShowPicker(true)} style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', marginTop: 2, padding: 0, textDecoration: 'underline' }}>
+                  Wrong contact? Pick another
                 </button>
               )}
             </>
@@ -358,7 +415,7 @@ function ActionCard({ action, onDismiss, contacts = {} }) {
 }
 
 // ── Message bubble ─────────────────────────────────────────────────
-function MessageBubble({ msg, timestamp, contacts }) {
+function MessageBubble({ msg, timestamp, contacts, contactList }) {
   const isUser = msg.role === 'user'
   const { text, actions } = parseActions(msg.content)
   const [dismissed, setDismissed] = useState([])
@@ -389,7 +446,7 @@ function MessageBubble({ msg, timestamp, contacts }) {
         </div>
         {actions.map((action, i) =>
           !dismissed.includes(i) && (
-            <ActionCard key={i} action={action} contacts={contacts} onDismiss={() => setDismissed(prev => [...prev, i])} />
+            <ActionCard key={i} action={action} contacts={contacts} contactList={contactList} onDismiss={() => setDismissed(prev => [...prev, i])} />
           )
         )}
         {timestamp && (
@@ -413,6 +470,7 @@ export default function Assistant() {
   const [briefingSent, setBriefingSent] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [contacts, setContacts] = useState({})
+  const [contactList, setContactList] = useState([])
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -427,18 +485,25 @@ export default function Assistant() {
       if (settings?.claude_api_key) setApiKey(settings.claude_api_key)
       if (history?.length) setMessages(history.map(m => ({ role: m.role, content: m.content, ts: m.created_at })))
 
-      // Build contacts lookup: support both exact and lowercase name matching
+      // Build contacts: rich list (for picker) + lookup map (for fast resolution)
+      const list = []
       const contactMap = {}
-      ;[...(leaderData || []), ...(memberData || [])].forEach(c => {
+      ;(leaderData || []).forEach(c => {
         if (c.name && c.phone_number) {
-          const trimmed = c.name.trim()
-          const lower = trimmed.toLowerCase()
-          // Support both exact name and lowercase for matching
-          contactMap[trimmed] = c.phone_number
-          contactMap[lower] = c.phone_number
+          list.push({ name: c.name.trim(), phone: c.phone_number, role: c.role || 'Leader' })
+          contactMap[c.name.trim()] = c.phone_number
+          contactMap[c.name.trim().toLowerCase()] = c.phone_number
+        }
+      })
+      ;(memberData || []).forEach(c => {
+        if (c.name && c.phone_number) {
+          list.push({ name: c.name.trim(), phone: c.phone_number, role: 'Member' })
+          contactMap[c.name.trim()] = c.phone_number
+          contactMap[c.name.trim().toLowerCase()] = c.phone_number
         }
       })
       setContacts(contactMap)
+      setContactList(list)
     }
     init()
   }, [])
@@ -597,7 +662,7 @@ export default function Assistant() {
             )}
           </div>
         )}
-        {messages.map((msg, i) => <MessageBubble key={i} msg={msg} timestamp={msg.ts} contacts={contacts} />)}
+        {messages.map((msg, i) => <MessageBubble key={i} msg={msg} timestamp={msg.ts} contacts={contacts} contactList={contactList} />)}
         {loading && (
           <div className="flex gap-3">
             <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent), var(--accent-blue))', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
