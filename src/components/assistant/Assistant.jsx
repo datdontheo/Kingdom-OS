@@ -71,25 +71,24 @@ Lead with most time-sensitive items (teaching prep deadlines first, then leader 
 ACTIONS — IMPORTANT:
 When you have actionable suggestions, append a maximum of 3 ACTION blocks per response, prioritized as above. If you have more than 3 suggestions, action the top 3 most important ones first, then at the end of your visible text say something like: "I also have 2 more actions I can set up — want me to continue?" Wait for Theo to say yes before outputting the next batch.
 
-CONTACT LOOKUP — CRITICAL FOR MESSAGING:
-The ministry context includes a <contacts_directory> with all leaders and members' names and phone numbers.
-WHENEVER Theo mentions a person by name (e.g., "message Ken", "text Sarah", "contact Pastor Mike"):
-1. SCAN the <contacts_directory> and find the EXACT matching name entry
-2. Use the EXACT name attribute value from the matching <contact> entry — do NOT guess or approximate
-3. Extract the phone number from that same entry and copy it EXACTLY
-4. Include both the exact name and phone in your send_whatsapp ACTION
-5. If no exact match is found, leave the phone empty — the user will add it manually
+CONTACT LOOKUP — HOW TO SEND MESSAGES:
+At the top of the ministry context you will find a CONTACTS LOOKUP TABLE listing every stored contact with their name, phone number, and role.
 
-IMPORTANT: Match the name EXACTLY as it appears in the directory. If Theo says "Ken", find the contact with name="Ken" (or "Kenneth", if that's what's stored). Do NOT substitute similar names.
+When Theo says anything like "message Ken", "text Sarah", "WhatsApp the VP", "call Pastor Mike":
+1. Scan the CONTACTS LOOKUP TABLE line by line
+2. Find the row where the name matches (or closely matches) what Theo said
+3. In your visible reply, confirm the match: "Found [Full Name] — [Phone] ([Role])"
+4. Then output the send_whatsapp ACTION with that exact phone number
+5. If you cannot find the name in the table, say so and ask Theo to confirm — do NOT guess a number
 
 Watch for these phrases and ALWAYS suggest relevant actions when you detect them:
 - "I need to", "we have to", "I should", "don't forget", "remind me", "follow up with", "check on" → create_task or set_reminder
-- "message/text/send/WhatsApp [name]" OR any mention of a person's name with communication context → send_whatsapp with phone lookup
+- "message/text/send/WhatsApp [name]" → send_whatsapp using CONTACTS LOOKUP TABLE
 - "I'm teaching on", "I need to prepare a teaching", "sermon", "message notes", "outline" → teaching_prep
 - "goal", "I want to achieve", "long-term", "vision" → add_goal
 - "schedule a meeting", "let's plan", "can we meet" → schedule_meeting
 
-For WhatsApp: <ACTION>{"type":"send_whatsapp","to":"[Person Name]","phone":"[REQUIRED: Look up the EXACT phone number from <contacts_directory>. Search for matching name. Copy the phone value exactly. If no match found, use empty string]","message":"[the message text to pre-fill]"}</ACTION>
+For WhatsApp: <ACTION>{"type":"send_whatsapp","to":"[Exact full name from CONTACTS LOOKUP TABLE]","phone":"[Exact phone from CONTACTS LOOKUP TABLE — copy it character for character]","message":"[the message text to pre-fill]"}</ACTION>
 
 For a task: <ACTION>{"type":"create_task","title":"[task title]","category":"[Teaching|Meeting|Follow-up|Admin|Event|Media|Finance|Prayer|Other]","priority":"[High|Medium|Low]","due_date":"[YYYY-MM-DD or empty string]","notes":"[brief context]"}</ACTION>
 
@@ -143,15 +142,20 @@ async function fetchMinistryContext() {
   const criticalCount = overdueLeaders.length + overdueTasks.length + criticalTeachings.length
   const atRiskCount = atRiskLeaders.length + unpreparedTeachings.filter(t => !inNext7Days(t.date)).length + atRiskGoals.length
 
-  const allContacts = leaderContacts.map(c => ({
-    ...c,
-    display: c.role ? `${c.name} (${c.role})` : c.name
-  })).concat(memberContacts.map(c => ({ ...c, display: c.name })))
+  const allContacts = [
+    ...leaderContacts.map(c => ({ name: c.name, phone: c.phone_number || '', role: c.role || 'Leader' })),
+    ...memberContacts.map(c => ({ name: c.name, phone: c.phone_number || '', role: 'Member' })),
+  ]
+
+  const contactsTable = allContacts.length
+    ? allContacts.map(c => `${c.name} | ${c.phone} | ${c.role}`).join('\n')
+    : '(no contacts stored yet)'
 
   return `<ministry_context date="${todayStr}">
-  <contacts_directory note="ALWAYS look up phone numbers here when generating send_whatsapp actions. Search by exact name or partial match.">
-    ${allContacts.map(c => `<contact name="${c.name}" display="${c.display}" phone="${c.phone_number || ''}" />`).join('\n    ')}
-  </contacts_directory>
+CONTACTS LOOKUP TABLE (use this to find phone numbers when Theo asks to message someone):
+${contactsTable}
+END OF CONTACTS TABLE
+
   <priority_summary critical_count="${criticalCount}" at_risk_count="${atRiskCount}">
     <critical_items>
       ${overdueLeaders.map(l => `<item type="leader" name="${l.name}" reason="overdue ${daysSince(l.last_contact_date || '')} days" />`).join('\n      ')}
