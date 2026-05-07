@@ -146,7 +146,7 @@ export default function Tasks() {
       </div>
 
       {/* Status filter — pill buttons */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {['Active', 'All', ...TASK_STATUSES].map(f => (
           <button key={f} onClick={() => setFilterStatus(f)}
             style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 20, border: '1px solid', cursor: 'pointer', transition: 'all 0.15s',
@@ -156,16 +156,6 @@ export default function Tasks() {
             {f}
           </button>
         ))}
-      </div>
-
-      {/* Category + Priority dropdowns */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <select className="ksm-input" style={{ minWidth: 130, flex: '1 1 130px', maxWidth: 200 }} value={filterCat} onChange={e => setFilterCat(e.target.value)}>
-          {['All', ...CATEGORIES].map(o => <option key={o}>{o}</option>)}
-        </select>
-        <select className="ksm-input" style={{ minWidth: 120, flex: '1 1 120px', maxWidth: 160 }} value={filterPri} onChange={e => setFilterPri(e.target.value)}>
-          {['All', ...PRIORITIES].map(o => <option key={o}>{o}</option>)}
-        </select>
       </div>
 
       {loading ? <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>Loading…</p>
