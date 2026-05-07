@@ -78,7 +78,8 @@ Watch for these phrases and ALWAYS suggest relevant actions when you detect them
 - "goal", "I want to achieve", "long-term", "vision" → add_goal
 - "schedule a meeting", "let's plan", "can we meet" → schedule_meeting
 
-For WhatsApp: <ACTION>{"type":"send_whatsapp","to":"[Person Name]","phone":"[phone number if known from context, else empty string]","message":"[the message text to pre-fill]"}</ACTION>
+For WhatsApp: <ACTION>{"type":"send_whatsapp","to":"[Person Name]","phone":"[REQUIRED: look up the phone number from <contacts_directory> in the context. Use the exact phone value from the matching <contact> entry. If not found, use empty string]","message":"[the message text to pre-fill]"}</ACTION>
+CRITICAL: Before generating any send_whatsapp ACTION, ALWAYS check the <contacts_directory> in the ministry context for the person's phone number. Copy it exactly as listed.
 
 For a task: <ACTION>{"type":"create_task","title":"[task title]","category":"[Teaching|Meeting|Follow-up|Admin|Event|Media|Finance|Prayer|Other]","priority":"[High|Medium|Low]","due_date":"[YYYY-MM-DD or empty string]","notes":"[brief context]"}</ACTION>
 
@@ -104,6 +105,8 @@ async function fetchMinistryContext() {
     supabase.from('teaching_calendar').select('event_name, date, venue, topic, preparation_status').gte('date', todayStr).lte('date', next7Str).order('date').limit(5),
     supabase.from('goals').select('title, category, status, next_action, target_date').eq('status', 'Active').limit(5),
     supabase.from('reminders').select('title, due_at').eq('status', 'pending').eq('done', false).lte('due_at', next7Str + 'T23:59:59').order('due_at').limit(5),
+    supabase.from('leaders').select('name, phone_number').not('phone_number', 'is', null),
+    supabase.from('people').select('name, phone_number').not('phone_number', 'is', null),
   ])
 
   const get = (i) => results[i].status === 'fulfilled' ? (results[i].value.data || []) : []
@@ -112,6 +115,8 @@ async function fetchMinistryContext() {
   const teachings = get(2)
   const goals = get(3)
   const reminders = get(4)
+  const leaderContacts = get(5)
+  const memberContacts = get(6)
 
   const overdueLeaders = leaders.filter(l =>
     l.follow_up_due_date ? isOverdue(l.follow_up_due_date) :
@@ -128,7 +133,12 @@ async function fetchMinistryContext() {
   const criticalCount = overdueLeaders.length + overdueTasks.length + criticalTeachings.length
   const atRiskCount = atRiskLeaders.length + unpreparedTeachings.filter(t => !inNext7Days(t.date)).length + atRiskGoals.length
 
+  const allContacts = [...leaderContacts, ...memberContacts]
+
   return `<ministry_context date="${todayStr}">
+  <contacts_directory note="ALWAYS look up phone numbers here when generating send_whatsapp actions">
+    ${allContacts.map(c => `<contact name="${c.name}" phone="${c.phone_number}" />`).join('\n    ')}
+  </contacts_directory>
   <priority_summary critical_count="${criticalCount}" at_risk_count="${atRiskCount}">
     <critical_items>
       ${overdueLeaders.map(l => `<item type="leader" name="${l.name}" reason="overdue ${daysSince(l.last_contact_date || '')} days" />`).join('\n      ')}
@@ -187,11 +197,21 @@ function parseActions(text) {
 }
 
 // ── ActionCard ─────────────────────────────────────────────────────
-function ActionCard({ action, onDismiss }) {
+function lookupPhone(name, contacts) {
+  if (!name || !contacts) return ''
+  const lower = name.toLowerCase().trim()
+  for (const [key, val] of Object.entries(contacts)) {
+    if (key === lower || key.includes(lower) || lower.includes(key)) return val
+  }
+  return ''
+}
+
+function ActionCard({ action, onDismiss, contacts = {} }) {
+  const resolvedPhone = action.phone || lookupPhone(action.to, contacts)
   const [done, setDone] = useState(false)
-  const [phone, setPhone] = useState(action.phone || '')
+  const [phone, setPhone] = useState(resolvedPhone)
   const [saving, setSaving] = useState(false)
-  const [showPhoneInput, setShowPhoneInput] = useState(false)
+  const [showPhoneInput, setShowPhoneInput] = useState(!resolvedPhone && action.type === 'send_whatsapp')
 
   if (done) return null
 
@@ -240,7 +260,14 @@ function ActionCard({ action, onDismiss }) {
           </p>
           {action.type === 'send_whatsapp' && (
             <>
-              <p style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>To: {action.to}</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <p style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>To: {action.to}</p>
+                {phone && !showPhoneInput && (
+                  <span style={{ fontSize: 11, color: 'var(--accent-green)', background: 'rgba(102,187,106,0.12)', padding: '2px 7px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <Check size={10} /> {phone}
+                  </span>
+                )}
+              </div>
               <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.5 }}>{action.message}</p>
               {showPhoneInput && (
                 <div className="flex gap-2 mt-2">
@@ -253,6 +280,11 @@ function ActionCard({ action, onDismiss }) {
                     onChange={e => setPhone(e.target.value)}
                   />
                 </div>
+              )}
+              {phone && !showPhoneInput && (
+                <button onClick={() => setShowPhoneInput(true)} style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', marginTop: 2, padding: 0, textDecoration: 'underline' }}>
+                  Wrong number? Edit
+                </button>
               )}
             </>
           )}
@@ -293,7 +325,7 @@ function ActionCard({ action, onDismiss }) {
 }
 
 // ── Message bubble ─────────────────────────────────────────────────
-function MessageBubble({ msg, timestamp }) {
+function MessageBubble({ msg, timestamp, contacts }) {
   const isUser = msg.role === 'user'
   const { text, actions } = parseActions(msg.content)
   const [dismissed, setDismissed] = useState([])
@@ -324,7 +356,7 @@ function MessageBubble({ msg, timestamp }) {
         </div>
         {actions.map((action, i) =>
           !dismissed.includes(i) && (
-            <ActionCard key={i} action={action} onDismiss={() => setDismissed(prev => [...prev, i])} />
+            <ActionCard key={i} action={action} contacts={contacts} onDismiss={() => setDismissed(prev => [...prev, i])} />
           )
         )}
         {timestamp && (
@@ -347,17 +379,29 @@ export default function Assistant() {
   const [apiKey, setApiKey] = useState('')
   const [briefingSent, setBriefingSent] = useState(false)
   const [clearing, setClearing] = useState(false)
+  const [contacts, setContacts] = useState({})
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
   useEffect(() => {
     async function init() {
-      const [{ data: settings }, { data: history }] = await Promise.all([
+      const [{ data: settings }, { data: history }, { data: leaderData }, { data: memberData }] = await Promise.all([
         supabase.from('settings').select('claude_api_key').limit(1).single(),
         supabase.from('chat_messages').select('role, content, created_at').order('created_at', { ascending: true }),
+        supabase.from('leaders').select('name, phone_number').not('phone_number', 'is', null),
+        supabase.from('people').select('name, phone_number').not('phone_number', 'is', null),
       ])
       if (settings?.claude_api_key) setApiKey(settings.claude_api_key)
       if (history?.length) setMessages(history.map(m => ({ role: m.role, content: m.content, ts: m.created_at })))
+
+      // Build contacts lookup: lowercase name → phone number
+      const contactMap = {}
+      ;[...(leaderData || []), ...(memberData || [])].forEach(c => {
+        if (c.name && c.phone_number) {
+          contactMap[c.name.toLowerCase().trim()] = c.phone_number
+        }
+      })
+      setContacts(contactMap)
     }
     init()
   }, [])
@@ -516,7 +560,7 @@ export default function Assistant() {
             )}
           </div>
         )}
-        {messages.map((msg, i) => <MessageBubble key={i} msg={msg} timestamp={msg.ts} />)}
+        {messages.map((msg, i) => <MessageBubble key={i} msg={msg} timestamp={msg.ts} contacts={contacts} />)}
         {loading && (
           <div className="flex gap-3">
             <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent), var(--accent-blue))', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
