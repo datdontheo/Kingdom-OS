@@ -410,8 +410,8 @@ export default function Assistant() {
     <div className="assistant-root flex flex-col" style={{ flex: 1, minHeight: 0, overflow: 'hidden', width: '100%' }}>
 
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 shrink-0"
-        style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)', backdropFilter: 'blur(16px)' }}>
+      <div className="flex items-center justify-between shrink-0"
+        style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)', backdropFilter: 'blur(16px)' }}>
         <div>
           <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>Kingdom OS Assistant</h2>
           <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>Powered by Groq · KSM Co-Pilot</p>
@@ -427,7 +427,7 @@ export default function Assistant() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{ display: 'flex', flexDirection: 'column', gap: 16, overscrollBehavior: 'contain', padding: '24px 20px', maxWidth: '100%' }}>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{ display: 'flex', flexDirection: 'column', gap: 16, overscrollBehavior: 'contain', padding: '12px 12px', maxWidth: '100%' }}>
         {messages.length === 0 && !loading && (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
             <div style={{ width: 52, height: 52, borderRadius: 16, background: 'linear-gradient(135deg, var(--accent-dim), rgba(96,165,250,0.1))', border: '1px solid var(--border-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
