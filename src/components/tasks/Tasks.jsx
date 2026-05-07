@@ -145,12 +145,27 @@ export default function Tasks() {
         <button onClick={() => setModal('new')} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}><Plus size={15} /> Add</button>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }}>
-        {[['Status', filterStatus, setFilterStatus, ['Active', 'All', ...TASK_STATUSES]], ['Category', filterCat, setFilterCat, ['All', ...CATEGORIES]], ['Priority', filterPri, setFilterPri, ['All', ...PRIORITIES]]].map(([label, val, setter, opts]) => (
-          <select key={label} className="ksm-input" style={{ minWidth: 120, flex: 'none' }} value={val} onChange={e => setter(e.target.value)}>
-            {opts.map(o => <option key={o}>{o}</option>)}
-          </select>
+      {/* Status filter — pill buttons */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+        {['Active', 'All', ...TASK_STATUSES].map(f => (
+          <button key={f} onClick={() => setFilterStatus(f)}
+            style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 20, border: '1px solid', cursor: 'pointer', transition: 'all 0.15s',
+              background: filterStatus === f ? 'var(--accent)' : 'transparent',
+              color: filterStatus === f ? '#fff' : 'var(--text-muted)',
+              borderColor: filterStatus === f ? 'var(--accent)' : 'var(--border)' }}>
+            {f}
+          </button>
         ))}
+      </div>
+
+      {/* Category + Priority dropdowns */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        <select className="ksm-input" style={{ minWidth: 130, flex: '1 1 130px', maxWidth: 200 }} value={filterCat} onChange={e => setFilterCat(e.target.value)}>
+          {['All', ...CATEGORIES].map(o => <option key={o}>{o}</option>)}
+        </select>
+        <select className="ksm-input" style={{ minWidth: 120, flex: '1 1 120px', maxWidth: 160 }} value={filterPri} onChange={e => setFilterPri(e.target.value)}>
+          {['All', ...PRIORITIES].map(o => <option key={o}>{o}</option>)}
+        </select>
       </div>
 
       {loading ? <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>Loading…</p>
