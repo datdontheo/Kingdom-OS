@@ -589,31 +589,23 @@ export default function Assistant() {
 
       const trimmed = newMessages.slice(-MAX_HISTORY).map(m => ({ role: m.role, content: m.content }))
 
-      const systemAndMessages = [
-        { role: 'user', content: systemWithContext },
-        ...trimmed.slice(0, -1),
-        { role: 'user', content: trimmed[trimmed.length - 1].content }
-      ]
-
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({
-          contents: systemAndMessages.map(m => ({
-            role: m.role === 'user' ? 'user' : 'model',
-            parts: [{ text: m.content }]
-          })),
-          generationConfig: { maxOutputTokens: 1500 }
+          model: 'llama-3.3-70b-versatile',
+          max_tokens: 1500,
+          messages: [{ role: 'system', content: systemWithContext }, ...trimmed],
         }),
       })
 
       if (!response.ok) {
         const err = await response.json()
-        throw new Error(err.error?.message || err.error?.details?.[0]?.description || 'API error')
+        throw new Error(err.error?.message || 'API error')
       }
 
       const data = await response.json()
-      const content = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated'
+      const content = data.choices[0].message.content
       const assistantMsg = { role: 'assistant', content, ts: new Date().toISOString() }
       setMessages(prev => [...prev, assistantMsg])
       await saveMessage('assistant', content)
@@ -639,7 +631,7 @@ export default function Assistant() {
         style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)', backdropFilter: 'blur(16px)' }}>
         <div>
           <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>Kingdom OS Assistant</h2>
-          <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>Powered by Gemini · KSM Co-Pilot</p>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>Powered by Groq · KSM Co-Pilot</p>
         </div>
         {messages.length > 0 && (
           <button onClick={clearHistory} disabled={clearing}

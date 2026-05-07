@@ -113,24 +113,24 @@ function AIPrepPanel({ event, apiKey, onSaved }) {
   const [results, setResults] = useState({})
 
   async function runAIPrep(btn) {
-    if (!apiKey) { alert('Please add your Gemini API key in Settings to use AI prep tools.'); return }
+    if (!apiKey) { alert('Please add your Groq API key in Settings to use AI prep tools.'); return }
     setLoadingKey(btn.key)
     try {
       const prompt = btn.prompt(event)
-      const systemPrompt = 'You are Kingdom OS, a ministry assistant helping Pastor Theophilus Laryea of Kingdom Seekers Ministry prepare powerful, scripturally sound teachings. Always use NKJV when quoting scripture. Be practical, clear, and spiritually grounded.'
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({
-          contents: [
-            { role: 'user', parts: [{ text: systemPrompt }] },
-            { role: 'user', parts: [{ text: prompt }] }
+          model: 'llama-3.3-70b-versatile',
+          max_tokens: 2000,
+          messages: [
+            { role: 'system', content: 'You are Kingdom OS, a ministry assistant helping Pastor Theophilus Laryea of Kingdom Seekers Ministry prepare powerful, scripturally sound teachings. Always use NKJV when quoting scripture. Be practical, clear, and spiritually grounded.' },
+            { role: 'user', content: prompt },
           ],
-          generationConfig: { maxOutputTokens: 2000 }
         }),
       })
       const data = await response.json()
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.'
+      const text = data.choices?.[0]?.message?.content || 'No response generated.'
       setResults(prev => ({ ...prev, [btn.key]: text }))
     } catch (err) {
       setResults(prev => ({ ...prev, [btn.key]: `Error: ${err.message}` }))
