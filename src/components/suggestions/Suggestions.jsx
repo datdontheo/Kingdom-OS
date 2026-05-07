@@ -14,6 +14,12 @@ const TYPE_META = {
   'Teaching Preparation': { icon: BookOpen, color: '#5a9fd4' },
 }
 
+const PRIORITY_META = {
+  'critical': { label: 'CRITICAL', color: '#ef5350', bg: '#ef535018' },
+  'high': { label: 'HIGH', color: '#5a9fd4', bg: '#5a9fd418' },
+  'medium': { label: 'MEDIUM', color: '#ffa726', bg: '#ffa72618' },
+}
+
 function SuggestionCard({ suggestion, onRefresh }) {
   const [acting, setActing] = useState(false)
   const meta = TYPE_META[suggestion.suggestion_type] || { icon: Lightbulb, color: 'var(--accent)' }
@@ -75,6 +81,11 @@ function SuggestionCard({ suggestion, onRefresh }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: FONT }}>{suggestion.title}</span>
+            {isPending && suggestion.priority && (
+              <span style={{ fontSize: 10, fontWeight: 700, color: PRIORITY_META[suggestion.priority]?.color || '#ffa726', background: PRIORITY_META[suggestion.priority]?.bg || '#ffa72618', padding: '3px 8px', borderRadius: 4, fontFamily: FONT, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {PRIORITY_META[suggestion.priority]?.label || 'MEDIUM'}
+              </span>
+            )}
             <span style={{ fontSize: 11, fontWeight: 600, color: meta.color, background: meta.color + '18', padding: '2px 8px', borderRadius: 6, fontFamily: FONT }}>{suggestion.suggestion_type}</span>
             {!isPending && (
               <span style={{ fontSize: 11, fontWeight: 600, color: suggestion.status === 'accepted' ? '#22a355' : '#9b9189', background: suggestion.status === 'accepted' ? '#22a35518' : '#9b918918', padding: '2px 8px', borderRadius: 6, fontFamily: FONT }}>
@@ -128,6 +139,13 @@ export default function Suggestions() {
     return true
   })
 
+  // Group pending suggestions by priority for display
+  const pendingByPriority = {
+    critical: filtered.filter(s => s.status === 'pending' && s.priority === 'critical'),
+    high: filtered.filter(s => s.status === 'pending' && s.priority === 'high'),
+    medium: filtered.filter(s => s.status === 'pending' && (s.priority === 'medium' || !s.priority)),
+  }
+
   const pendingCount = suggestions.filter(s => s.status === 'pending').length
 
   return (
@@ -160,6 +178,45 @@ export default function Suggestions() {
           <p style={{ color: 'var(--text-muted)', fontFamily: FONT, fontSize: 14 }}>
             {filter === 'Pending' ? 'No pending suggestions. Chat with the assistant to get started.' : `No ${filter.toLowerCase()} suggestions.`}
           </p>
+        </div>
+      ) : filter === 'Pending' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {pendingByPriority.critical.length > 0 && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <div style={{ width: 4, height: 20, background: '#ef5350', borderRadius: 2 }} />
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#ef5350', fontFamily: FONT }}>Critical ({pendingByPriority.critical.length})</h3>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: FONT, marginLeft: 'auto' }}>Needs immediate attention</p>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {pendingByPriority.critical.map(s => <SuggestionCard key={s.id} suggestion={s} onRefresh={load} />)}
+              </div>
+            </div>
+          )}
+          {pendingByPriority.high.length > 0 && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <div style={{ width: 4, height: 20, background: '#5a9fd4', borderRadius: 2 }} />
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#5a9fd4', fontFamily: FONT }}>High ({pendingByPriority.high.length})</h3>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: FONT, marginLeft: 'auto' }}>Important to address soon</p>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {pendingByPriority.high.map(s => <SuggestionCard key={s.id} suggestion={s} onRefresh={load} />)}
+              </div>
+            </div>
+          )}
+          {pendingByPriority.medium.length > 0 && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <div style={{ width: 4, height: 20, background: '#ffa726', borderRadius: 2 }} />
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#ffa726', fontFamily: FONT }}>Other ({pendingByPriority.medium.length})</h3>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: FONT, marginLeft: 'auto' }}>When you have time</p>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {pendingByPriority.medium.map(s => <SuggestionCard key={s.id} suggestion={s} onRefresh={load} />)}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

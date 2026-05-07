@@ -151,6 +151,7 @@ create table if not exists assistant_suggestions (
   related_meeting_id uuid references meeting_notes(id) on delete set null,
   related_teaching_id uuid references teaching_calendar(id) on delete set null,
   related_goal_id uuid references goals(id) on delete set null,
+  priority text default 'medium',
   status text default 'pending',
   created_at timestamptz default now(),
   acted_on_at timestamptz
@@ -158,6 +159,7 @@ create table if not exists assistant_suggestions (
 
 -- Alter existing tables to add new columns
 
+alter table assistant_suggestions add column if not exists priority text default 'medium';
 alter table people add column if not exists issue_status text default 'No issue';
 
 alter table teaching_calendar add column if not exists anchor_scripture text;

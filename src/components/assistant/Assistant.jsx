@@ -50,8 +50,18 @@ YOUR CORE RESPONSIBILITIES:
 
 TONE: Warm, direct, and practically helpful — like a trusted co-labourer who knows the weight of the call. Never make Theo feel behind or overwhelmed. Speak plainly. Anchor suggestions in Scripture naturally.
 
+PRIORITY FILTERING — CRITICAL:
+Follow this strict priority order when suggesting actions:
+1. CRITICAL — Overdue leaders (>14 days since contact), overdue tasks, unprepared teachings within 7 days
+2. HIGH — Leaders 7-14 days overdue, teachings 7-30 days away unprepared, important upcoming meetings
+3. MEDIUM — Everything else (routine follow-ups, future planning, optional prep)
+
+ONLY suggest CRITICAL items first. If user asks for more or conversation permits, surface HIGH items. Save MEDIUM for end or only when asked.
+For each suggestion, internally mark it: <PRIORITY>critical|high|medium</PRIORITY>
+Lead with most time-sensitive items (teaching prep deadlines first, then leader overdue, then tasks).
+
 ACTIONS — IMPORTANT:
-When you have actionable suggestions, append a maximum of 3 ACTION blocks per response. If you have more than 3 suggestions, action the top 3 most important ones first, then at the end of your visible text say something like: "I also have 2 more actions I can set up — want me to continue?" Wait for Theo to say yes before outputting the next batch.
+When you have actionable suggestions, append a maximum of 3 ACTION blocks per response, prioritized as above. If you have more than 3 suggestions, action the top 3 most important ones first, then at the end of your visible text say something like: "I also have 2 more actions I can set up — want me to continue?" Wait for Theo to say yes before outputting the next batch.
 
 Watch for these phrases and ALWAYS suggest relevant actions when you detect them:
 - "I need to", "we have to", "I should", "don't forget", "remind me", "follow up with", "check on" → create_task or set_reminder
@@ -76,12 +86,15 @@ async function fetchMinistryContext() {
   const next7 = new Date()
   next7.setDate(next7.getDate() + 7)
   const next7Str = next7.toISOString().split('T')[0]
+  const next30 = new Date()
+  next30.setDate(next30.getDate() + 30)
+  const next30Str = next30.toISOString().split('T')[0]
 
   const results = await Promise.allSettled([
     supabase.from('leaders').select('name, role, phone_number, last_contact_date, follow_up_status, follow_up_due_date').neq('follow_up_status', 'No action needed'),
     supabase.from('tasks').select('title, category, priority, status, due_date, assigned_to').neq('status', 'Done'),
     supabase.from('teaching_calendar').select('event_name, date, venue, topic, preparation_status').gte('date', todayStr).lte('date', next7Str).order('date').limit(5),
-    supabase.from('goals').select('title, category, status, next_action').eq('status', 'Active').limit(5),
+    supabase.from('goals').select('title, category, status, next_action, target_date').eq('status', 'Active').limit(5),
     supabase.from('reminders').select('title, due_at').eq('status', 'pending').eq('done', false).lte('due_at', next7Str + 'T23:59:59').order('due_at').limit(5),
   ])
 
@@ -96,15 +109,37 @@ async function fetchMinistryContext() {
     l.follow_up_due_date ? isOverdue(l.follow_up_due_date) :
     l.last_contact_date ? daysSince(l.last_contact_date) > 14 : false
   )
+  const atRiskLeaders = leaders.filter(l =>
+    l.last_contact_date && daysSince(l.last_contact_date) >= 7 && daysSince(l.last_contact_date) <= 14
+  )
   const overdueTasks = tasks.filter(t => t.due_date && isOverdue(t.due_date))
   const unpreparedTeachings = teachings.filter(t => t.preparation_status !== 'Ready' && t.preparation_status !== 'Taught')
+  const criticalTeachings = unpreparedTeachings.filter(t => inNext7Days(t.date))
+  const atRiskGoals = goals.filter(g => g.target_date && inNext7Days(g.target_date))
+
+  const criticalCount = overdueLeaders.length + overdueTasks.length + criticalTeachings.length
+  const atRiskCount = atRiskLeaders.length + unpreparedTeachings.filter(t => !inNext7Days(t.date)).length + atRiskGoals.length
 
   return `<ministry_context date="${todayStr}">
+  <priority_summary critical_count="${criticalCount}" at_risk_count="${atRiskCount}">
+    <critical_items>
+      ${overdueLeaders.map(l => `<item type="leader" name="${l.name}" reason="overdue ${daysSince(l.last_contact_date || '')} days" />`).join('\n      ')}
+      ${overdueTasks.map(t => `<item type="task" name="${t.title}" reason="overdue ${daysSince(t.due_date)}" />`).join('\n      ')}
+      ${criticalTeachings.map(t => `<item type="teaching" name="${t.event_name}" reason="unprepared, ${inNext7Days(t.date) ? 'due soon' : 'upcoming'}" />`).join('\n      ')}
+    </critical_items>
+    <at_risk_items>
+      ${atRiskLeaders.map(l => `<item type="leader" name="${l.name}" reason="check-in due ${daysSince(l.last_contact_date)} days" />`).join('\n      ')}
+      ${atRiskGoals.map(g => `<item type="goal" name="${g.title}" reason="target approaching" />`).join('\n      ')}
+    </at_risk_items>
+  </priority_summary>
   <leaders_overdue_for_followup count="${overdueLeaders.length}">
     ${overdueLeaders.map(l => `<leader name="${l.name}" role="${l.role || ''}" phone="${l.phone_number || ''}" last_contact="${l.last_contact_date || 'unknown'}" days_since="${l.last_contact_date ? daysSince(l.last_contact_date) : 'unknown'}" status="${l.follow_up_status}" />`).join('\n    ')}
   </leaders_overdue_for_followup>
-  <upcoming_teachings_7_days count="${teachings.length}">
-    ${teachings.map(t => `<teaching title="${t.event_name}" date="${t.date}" venue="${t.venue || ''}" topic="${t.topic || ''}" prep="${t.preparation_status}" />`).join('\n    ')}
+  <leaders_at_risk count="${atRiskLeaders.length}">
+    ${atRiskLeaders.map(l => `<leader name="${l.name}" days_since="${daysSince(l.last_contact_date)}" />`).join('\n    ')}
+  </leaders_at_risk>
+  <upcoming_teachings_7_days count="${criticalTeachings.length}">
+    ${criticalTeachings.map(t => `<teaching title="${t.event_name}" date="${t.date}" venue="${t.venue || ''}" prep="${t.preparation_status}" days_until="${Math.ceil((new Date(t.date) - new Date(todayStr)) / (1000 * 60 * 60 * 24))}" />`).join('\n    ')}
   </upcoming_teachings_7_days>
   <unprepared_teachings count="${unpreparedTeachings.length}">
     ${unpreparedTeachings.map(t => `<teaching title="${t.event_name}" date="${t.date}" prep_status="${t.preparation_status}" />`).join('\n    ')}
@@ -113,7 +148,7 @@ async function fetchMinistryContext() {
     ${overdueTasks.map(t => `<task title="${t.title}" category="${t.category}" priority="${t.priority}" due="${t.due_date}" />`).join('\n    ')}
   </overdue_tasks>
   <active_goals count="${goals.length}">
-    ${goals.map(g => `<goal title="${g.title}" category="${g.category}" next_action="${g.next_action || ''}" />`).join('\n    ')}
+    ${goals.map(g => `<goal title="${g.title}" category="${g.category}" next_action="${g.next_action || ''}" target_date="${g.target_date || ''}" />`).join('\n    ')}
   </active_goals>
   <upcoming_reminders count="${reminders.length}">
     ${reminders.map(r => `<reminder title="${r.title}" due="${r.due_at}" />`).join('\n    ')}
@@ -123,12 +158,23 @@ async function fetchMinistryContext() {
 
 // ── Action parsing ─────────────────────────────────────────────────
 function parseActions(text) {
-  const matches = [...text.matchAll(/<ACTION>([\s\S]*?)<\/ACTION>/g)]
+  const actionMatches = [...text.matchAll(/<ACTION>([\s\S]*?)<\/ACTION>/g)]
   const actions = []
-  for (const match of matches) {
-    try { actions.push(JSON.parse(match[1])) } catch {}
+
+  for (const match of actionMatches) {
+    try {
+      const action = JSON.parse(match[1])
+      // Extract priority if marked nearby
+      const actionBlock = match[0]
+      const priorityMatch = actionBlock.match(/<PRIORITY>(critical|high|medium)<\/PRIORITY>/)
+      if (priorityMatch) {
+        action.priority = priorityMatch[1]
+      }
+      actions.push(action)
+    } catch {}
   }
-  const cleanText = text.replace(/<ACTION>[\s\S]*?<\/ACTION>/g, '').trim()
+
+  const cleanText = text.replace(/<PRIORITY>[\s\S]*?<\/PRIORITY>/g, '').replace(/<ACTION>[\s\S]*?<\/ACTION>/g, '').trim()
   return { text: cleanText, actions }
 }
 
@@ -344,6 +390,7 @@ export default function Assistant() {
       description: action.message || action.notes || action.body || null,
       action_json: action,
       related_person_name: action.to || action.person || null,
+      priority: action.priority || 'medium',
       status: 'pending',
     }))
     await supabase.from('assistant_suggestions').insert(rows)
