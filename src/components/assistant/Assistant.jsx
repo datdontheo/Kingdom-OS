@@ -255,7 +255,7 @@ function MessageBubble({ msg, timestamp }) {
       <div style={{ maxWidth: '82%' }}>
         <div
           style={{
-            padding: '10px 14px',
+            padding: '12px 16px',
             borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
             fontSize: 14,
             lineHeight: 1.6,
