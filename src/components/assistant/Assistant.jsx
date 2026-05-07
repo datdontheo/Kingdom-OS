@@ -589,11 +589,11 @@ export default function Assistant() {
 
       const trimmed = newMessages.slice(-MAX_HISTORY).map(m => ({ role: m.role, content: m.content }))
 
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: 'gemini-2.0-flash',
           max_tokens: 1500,
           messages: [{ role: 'system', content: systemWithContext }, ...trimmed],
         }),
@@ -631,7 +631,7 @@ export default function Assistant() {
         style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)', backdropFilter: 'blur(16px)' }}>
         <div>
           <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>Kingdom OS Assistant</h2>
-          <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>Powered by Groq · KSM Co-Pilot</p>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>Powered by Gemini · KSM Co-Pilot</p>
         </div>
         {messages.length > 0 && (
           <button onClick={clearHistory} disabled={clearing}

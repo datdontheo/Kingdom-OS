@@ -113,15 +113,15 @@ function AIPrepPanel({ event, apiKey, onSaved }) {
   const [results, setResults] = useState({})
 
   async function runAIPrep(btn) {
-    if (!apiKey) { alert('Please add your Groq API key in Settings to use AI prep tools.'); return }
+    if (!apiKey) { alert('Please add your Gemini API key in Settings to use AI prep tools.'); return }
     setLoadingKey(btn.key)
     try {
       const prompt = btn.prompt(event)
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: 'gemini-2.0-flash',
           max_tokens: 2000,
           messages: [
             { role: 'system', content: 'You are Kingdom OS, a ministry assistant helping Pastor Theophilus Laryea of Kingdom Seekers Ministry prepare powerful, scripturally sound teachings. Always use NKJV when quoting scripture. Be practical, clear, and spiritually grounded.' },
