@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { formatDate, daysSince, leaderStatusColor, LEADER_FOLLOW_UP_STATUSES } from '../../lib/utils'
 import { Users, Plus, X, MessageCircle, Download } from 'lucide-react'
+import PhoneInput from '../ui/PhoneInput'
 
 const FONT = 'Nexa, DM Sans, sans-serif'
 
@@ -59,7 +60,7 @@ function Modal({ leader, onClose, onSave }) {
           </div>
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', fontFamily: FONT, display: 'block', marginBottom: 4 }}>Phone Number</label>
-            <input className="ksm-input" value={form.phone_number} onChange={e => set('phone_number', e.target.value)} placeholder="+233..." />
+            <PhoneInput value={form.phone_number} onChange={v => set('phone_number', v)} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>

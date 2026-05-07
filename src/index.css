@@ -140,11 +140,12 @@ body {
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   padding: 10px 14px;
-  font-size: 14px;
+  font-size: 16px; /* Must be ≥16px to prevent mobile auto-zoom */
   color: var(--text-primary);
   font-family: 'Nexa', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', system-ui, sans-serif;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
+  touch-action: manipulation; /* Prevent double-tap zoom */
 }
 .ksm-input::placeholder { color: var(--text-muted); }
 .ksm-input:focus {
