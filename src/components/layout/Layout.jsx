@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, MessageSquare, Users, CheckSquare,
   BookOpen, Target, FileText, Settings, Sun, Moon, Menu, Bell,
@@ -92,6 +92,7 @@ function SidebarContent({ onClose, theme, toggle }) {
 export default function Layout({ children }) {
   const { theme, toggle } = useTheme()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const navigate = useNavigate()
   useReminders()
 
   return (
@@ -119,7 +120,7 @@ export default function Layout({ children }) {
             <Menu size={22} />
           </button>
           <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: FONT }}>Kingdom Seekers</span>
-          <button style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}>
+          <button onClick={() => navigate('/reminders')} style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}>
             <Bell size={20} />
           </button>
         </div>
