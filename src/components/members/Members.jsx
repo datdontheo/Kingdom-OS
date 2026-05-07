@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { formatDate, daysSince, memberIssueColor, MEMBER_ISSUE_STATUSES } from '../../lib/utils'
 import { UserCircle, Plus, X, MessageCircle } from 'lucide-react'
+import PhoneInput from '../ui/PhoneInput'
 
 const FONT = 'Nexa, DM Sans, sans-serif'
 
@@ -46,7 +47,7 @@ function Modal({ member, onClose, onSave }) {
           </div>
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', fontFamily: FONT, display: 'block', marginBottom: 4 }}>Phone Number</label>
-            <input className="ksm-input" value={form.phone_number} onChange={e => set('phone_number', e.target.value)} placeholder="+233..." />
+            <PhoneInput value={form.phone_number} onChange={v => set('phone_number', v)} />
           </div>
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', fontFamily: FONT, display: 'block', marginBottom: 4 }}>Issue Status</label>
