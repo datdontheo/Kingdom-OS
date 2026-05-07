@@ -71,15 +71,24 @@ Lead with most time-sensitive items (teaching prep deadlines first, then leader 
 ACTIONS — IMPORTANT:
 When you have actionable suggestions, append a maximum of 3 ACTION blocks per response, prioritized as above. If you have more than 3 suggestions, action the top 3 most important ones first, then at the end of your visible text say something like: "I also have 2 more actions I can set up — want me to continue?" Wait for Theo to say yes before outputting the next batch.
 
+CONTACT LOOKUP — CRITICAL FOR MESSAGING:
+The ministry context includes a <contacts_directory> with all leaders and members' names and phone numbers.
+WHENEVER Theo mentions a person by name (e.g., "message John", "text Sarah", "contact Pastor Mike", "remind me to call David"):
+1. IMMEDIATELY look up that person's name in the <contacts_directory>
+2. Extract their phone number exactly as listed
+3. Include the phone number in your send_whatsapp ACTION
+4. If the name is not found, leave the phone field empty and the user can add it manually
+
+Example: If Theo says "message the VP", search contacts for names with "VP" or find the Vice-President's name in the contacts list, then generate the action with their phone number filled in.
+
 Watch for these phrases and ALWAYS suggest relevant actions when you detect them:
 - "I need to", "we have to", "I should", "don't forget", "remind me", "follow up with", "check on" → create_task or set_reminder
-- "message/text/send/WhatsApp [name]" → send_whatsapp
+- "message/text/send/WhatsApp [name]" OR any mention of a person's name with communication context → send_whatsapp with phone lookup
 - "I'm teaching on", "I need to prepare a teaching", "sermon", "message notes", "outline" → teaching_prep
 - "goal", "I want to achieve", "long-term", "vision" → add_goal
 - "schedule a meeting", "let's plan", "can we meet" → schedule_meeting
 
-For WhatsApp: <ACTION>{"type":"send_whatsapp","to":"[Person Name]","phone":"[REQUIRED: look up the phone number from <contacts_directory> in the context. Use the exact phone value from the matching <contact> entry. If not found, use empty string]","message":"[the message text to pre-fill]"}</ACTION>
-CRITICAL: Before generating any send_whatsapp ACTION, ALWAYS check the <contacts_directory> in the ministry context for the person's phone number. Copy it exactly as listed.
+For WhatsApp: <ACTION>{"type":"send_whatsapp","to":"[Person Name]","phone":"[REQUIRED: Look up the EXACT phone number from <contacts_directory>. Search for matching name. Copy the phone value exactly. If no match found, use empty string]","message":"[the message text to pre-fill]"}</ACTION>
 
 For a task: <ACTION>{"type":"create_task","title":"[task title]","category":"[Teaching|Meeting|Follow-up|Admin|Event|Media|Finance|Prayer|Other]","priority":"[High|Medium|Low]","due_date":"[YYYY-MM-DD or empty string]","notes":"[brief context]"}</ACTION>
 
@@ -105,7 +114,7 @@ async function fetchMinistryContext() {
     supabase.from('teaching_calendar').select('event_name, date, venue, topic, preparation_status').gte('date', todayStr).lte('date', next7Str).order('date').limit(5),
     supabase.from('goals').select('title, category, status, next_action, target_date').eq('status', 'Active').limit(5),
     supabase.from('reminders').select('title, due_at').eq('status', 'pending').eq('done', false).lte('due_at', next7Str + 'T23:59:59').order('due_at').limit(5),
-    supabase.from('leaders').select('name, phone_number').not('phone_number', 'is', null),
+    supabase.from('leaders').select('name, role, phone_number').not('phone_number', 'is', null),
     supabase.from('people').select('name, phone_number').not('phone_number', 'is', null),
   ])
 
@@ -133,11 +142,14 @@ async function fetchMinistryContext() {
   const criticalCount = overdueLeaders.length + overdueTasks.length + criticalTeachings.length
   const atRiskCount = atRiskLeaders.length + unpreparedTeachings.filter(t => !inNext7Days(t.date)).length + atRiskGoals.length
 
-  const allContacts = [...leaderContacts, ...memberContacts]
+  const allContacts = leaderContacts.map(c => ({
+    ...c,
+    display: c.role ? `${c.name} (${c.role})` : c.name
+  })).concat(memberContacts.map(c => ({ ...c, display: c.name })))
 
   return `<ministry_context date="${todayStr}">
-  <contacts_directory note="ALWAYS look up phone numbers here when generating send_whatsapp actions">
-    ${allContacts.map(c => `<contact name="${c.name}" phone="${c.phone_number}" />`).join('\n    ')}
+  <contacts_directory note="ALWAYS look up phone numbers here when generating send_whatsapp actions. Search by exact name or partial match.">
+    ${allContacts.map(c => `<contact name="${c.name}" display="${c.display}" phone="${c.phone_number || ''}" />`).join('\n    ')}
   </contacts_directory>
   <priority_summary critical_count="${criticalCount}" at_risk_count="${atRiskCount}">
     <critical_items>
@@ -200,9 +212,24 @@ function parseActions(text) {
 function lookupPhone(name, contacts) {
   if (!name || !contacts) return ''
   const lower = name.toLowerCase().trim()
+
+  // Exact match (fastest)
+  if (contacts[lower]) return contacts[lower]
+
+  // Partial match (either contains the search, or the search contains it)
   for (const [key, val] of Object.entries(contacts)) {
-    if (key === lower || key.includes(lower) || lower.includes(key)) return val
+    if (key === lower) return val
+    if (key.includes(lower) || lower.includes(key)) return val
   }
+
+  // Try word-based matching (e.g., searching "John" finds "John Smith")
+  const words = lower.split(/\s+/)
+  for (const word of words) {
+    for (const [key, val] of Object.entries(contacts)) {
+      if (key.includes(word)) return val
+    }
+  }
+
   return ''
 }
 
@@ -388,7 +415,7 @@ export default function Assistant() {
       const [{ data: settings }, { data: history }, { data: leaderData }, { data: memberData }] = await Promise.all([
         supabase.from('settings').select('claude_api_key').limit(1).single(),
         supabase.from('chat_messages').select('role, content, created_at').order('created_at', { ascending: true }),
-        supabase.from('leaders').select('name, phone_number').not('phone_number', 'is', null),
+        supabase.from('leaders').select('name, phone_number, role').not('phone_number', 'is', null),
         supabase.from('people').select('name, phone_number').not('phone_number', 'is', null),
       ])
       if (settings?.claude_api_key) setApiKey(settings.claude_api_key)
