@@ -24,6 +24,13 @@
   font-display: swap;
 }
 
+/* ── Page scroll: main is overflow:hidden; route components scroll themselves ── */
+main > *:not(.assistant-root) {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* ── Theme Variables ─────────────────────────────────────────────── */
 :root {
   color-scheme: light;

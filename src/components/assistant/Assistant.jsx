@@ -407,7 +407,7 @@ export default function Assistant() {
   }
 
   return (
-    <div className="flex flex-col" style={{ height: '100%', maxHeight: 'calc(100svh - 0px)' }}>
+    <div className="assistant-root flex flex-col" style={{ flex: 1, minHeight: 0 }}>
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 shrink-0"
@@ -456,7 +456,7 @@ export default function Assistant() {
       </div>
 
       {/* Input */}
-      <form onSubmit={sendMessage} className="shrink-0 px-4 py-3 mb-16 md:mb-0"
+      <form onSubmit={sendMessage} className="shrink-0 px-4 py-3"
         style={{ borderTop: '1px solid var(--border)', background: 'var(--bg-surface)', backdropFilter: 'blur(16px)' }}>
         <div className="flex gap-2 items-end">
           <textarea

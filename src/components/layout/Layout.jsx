@@ -124,7 +124,7 @@ export default function Layout({ children }) {
           </button>
         </div>
 
-        <main style={{ flex: 1, overflowY: 'auto' }}>
+        <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {children}
         </main>
       </div>
