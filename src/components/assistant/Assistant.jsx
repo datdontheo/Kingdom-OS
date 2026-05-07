@@ -427,7 +427,7 @@ export default function Assistant() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{ display: 'flex', flexDirection: 'column', gap: 16, overscrollBehavior: 'contain', padding: '12px 12px', maxWidth: '100%' }}>
         {messages.length === 0 && !loading && (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
             <div style={{ width: 52, height: 52, borderRadius: 16, background: 'linear-gradient(135deg, var(--accent-dim), rgba(96,165,250,0.1))', border: '1px solid var(--border-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
