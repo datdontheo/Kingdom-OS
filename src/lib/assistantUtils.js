@@ -114,3 +114,71 @@ export function generateCheckInQuestions(context) {
 
   return questions.slice(0, 3) // Return max 3 questions
 }
+
+export function createConversationSummary(messages, daysBack = 7) {
+  if (!messages || messages.length === 0) return ''
+
+  const now = new Date()
+  const cutoffDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000)
+
+  // Find messages older than the cutoff
+  const olderMessages = messages.filter(m => {
+    const msgDate = new Date(m.ts || m.created_at)
+    return msgDate < cutoffDate
+  })
+
+  if (olderMessages.length === 0) return ''
+
+  // Extract key topics from older conversations
+  const topics = new Set()
+  const people = new Set()
+  const actions = new Set()
+
+  olderMessages.forEach(msg => {
+    const text = msg.content.toLowerCase()
+
+    // Extract mentioned people
+    const personMatches = text.match(/(?:theo|you)|(?:with |talking to )\b([a-z]+(?:\s[a-z]+)?)\b/gi)
+    if (personMatches) personMatches.forEach(p => people.add(p))
+
+    // Detect topics
+    if (/teaching|sermon|bible study|message|prepare|prepa/.test(text)) topics.add('Teaching Preparation')
+    if (/leader|team|officer|director|council/.test(text)) topics.add('Leadership')
+    if (/meeting|schedule|gather|huddle|discuss/.test(text)) topics.add('Meetings & Planning')
+    if (/task|project|action|work|activity/.test(text)) topics.add('Tasks & Projects')
+    if (/goal|vision|plan|strategy|long.term/.test(text)) topics.add('Vision & Goals')
+    if (/reminder|follow.up|contact|check.in|touchbase/.test(text)) topics.add('Follow-ups & Reminders')
+    if (/prayer|spiritual|faith|worship|intercess/.test(text)) topics.add('Spiritual Matters')
+
+    // Detect action decisions
+    if (/create task|add reminder|send whatsapp|message/.test(text)) {
+      if (/task/.test(text)) actions.add('Task Creation')
+      if (/reminder|remind/.test(text)) actions.add('Reminders Set')
+      if (/whatsapp|message|text|contact/.test(text)) actions.add('Messages Sent')
+    }
+  })
+
+  // Build summary text
+  let summary = `[PREVIOUS CONVERSATION HISTORY (${daysBack}+ days ago):\n`
+
+  if (topics.size > 0) {
+    summary += `Key topics discussed: ${Array.from(topics).slice(0, 3).join(', ')}.\n`
+  }
+
+  if (people.size > 0) {
+    const uniquePeople = Array.from(people).filter(p => p && p.length > 2).slice(0, 3)
+    if (uniquePeople.length > 0) {
+      summary += `People mentioned: ${uniquePeople.join(', ')}.\n`
+    }
+  }
+
+  if (actions.size > 0) {
+    summary += `Recent actions: ${Array.from(actions).join(', ')}.\n`
+  }
+
+  // Add a note about message count
+  summary += `Total ${olderMessages.length} messages in conversation history before this week.\n`
+  summary += `Reference these past discussions to maintain continuity and avoid re-asking about already-decided items.]\n`
+
+  return summary
+}

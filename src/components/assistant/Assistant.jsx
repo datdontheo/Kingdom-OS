@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { today, isOverdue, daysSince, inNext7Days } from '../../lib/utils'
 import { scheduleReminder } from '../../hooks/useReminders'
-import { detectActionTriggers, buildTriggerHint, mapActionTypeToSuggestionType, generateCheckInQuestions } from '../../lib/assistantUtils'
+<<<<<<< HEAD
+import { detectActionTriggers, buildTriggerHint, mapActionTypeToSuggestionType, generateCheckInQuestions, createConversationSummary } from '../../lib/assistantUtils'
 import { Send, Loader2, Bot, MessageCircle, CheckSquare, Bell, X, Check, Phone, Zap } from 'lucide-react'
 
 // ── System prompt ──────────────────────────────────────────────────
@@ -426,6 +427,15 @@ export default function Assistant() {
 
       let systemWithContext = SYSTEM_PROMPT + '\n\n' + context + triggerHint
 
+<<<<<<< HEAD
+=======
+      // Add conversation history summary to give context awareness
+      const conversationSummary = createConversationSummary(messages, 7)
+      if (conversationSummary) {
+        systemWithContext += '\n\n' + conversationSummary
+      }
+
+>>>>>>> claude/sync-main-branch-2iqTf
       // Add check-in questions hint for briefings
       if (isBriefing) {
         const checkInQs = generateCheckInQuestions(context)
