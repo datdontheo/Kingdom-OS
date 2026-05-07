@@ -117,20 +117,20 @@ function AIPrepPanel({ event, apiKey, onSaved }) {
     setLoadingKey(btn.key)
     try {
       const prompt = btn.prompt(event)
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+      const systemPrompt = 'You are Kingdom OS, a ministry assistant helping Pastor Theophilus Laryea of Kingdom Seekers Ministry prepare powerful, scripturally sound teachings. Always use NKJV when quoting scripture. Be practical, clear, and spiritually grounded.'
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'gemini-2.0-flash',
-          max_tokens: 2000,
-          messages: [
-            { role: 'system', content: 'You are Kingdom OS, a ministry assistant helping Pastor Theophilus Laryea of Kingdom Seekers Ministry prepare powerful, scripturally sound teachings. Always use NKJV when quoting scripture. Be practical, clear, and spiritually grounded.' },
-            { role: 'user', content: prompt },
+          contents: [
+            { role: 'user', parts: [{ text: systemPrompt }] },
+            { role: 'user', parts: [{ text: prompt }] }
           ],
+          generationConfig: { maxOutputTokens: 2000 }
         }),
       })
       const data = await response.json()
-      const text = data.choices?.[0]?.message?.content || 'No response generated.'
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.'
       setResults(prev => ({ ...prev, [btn.key]: text }))
     } catch (err) {
       setResults(prev => ({ ...prev, [btn.key]: `Error: ${err.message}` }))

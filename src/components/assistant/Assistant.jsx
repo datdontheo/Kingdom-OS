@@ -589,23 +589,31 @@ export default function Assistant() {
 
       const trimmed = newMessages.slice(-MAX_HISTORY).map(m => ({ role: m.role, content: m.content }))
 
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+      const systemAndMessages = [
+        { role: 'user', content: systemWithContext },
+        ...trimmed.slice(0, -1),
+        { role: 'user', content: trimmed[trimmed.length - 1].content }
+      ]
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'gemini-2.0-flash',
-          max_tokens: 1500,
-          messages: [{ role: 'system', content: systemWithContext }, ...trimmed],
+          contents: systemAndMessages.map(m => ({
+            role: m.role === 'user' ? 'user' : 'model',
+            parts: [{ text: m.content }]
+          })),
+          generationConfig: { maxOutputTokens: 1500 }
         }),
       })
 
       if (!response.ok) {
         const err = await response.json()
-        throw new Error(err.error?.message || 'API error')
+        throw new Error(err.error?.message || err.error?.details?.[0]?.description || 'API error')
       }
 
       const data = await response.json()
-      const content = data.choices[0].message.content
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated'
       const assistantMsg = { role: 'assistant', content, ts: new Date().toISOString() }
       setMessages(prev => [...prev, assistantMsg])
       await saveMessage('assistant', content)
