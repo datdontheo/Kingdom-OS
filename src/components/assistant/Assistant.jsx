@@ -72,14 +72,17 @@ ACTIONS — IMPORTANT:
 When you have actionable suggestions, append a maximum of 3 ACTION blocks per response, prioritized as above. If you have more than 3 suggestions, action the top 3 most important ones first, then at the end of your visible text say something like: "I also have 2 more actions I can set up — want me to continue?" Wait for Theo to say yes before outputting the next batch.
 
 CONTACT LOOKUP — HOW TO SEND MESSAGES:
-At the top of the ministry context you will find a CONTACTS LOOKUP TABLE listing every stored contact with their name, phone number, and role.
+At the top of the ministry context you will find a CONTACTS LOOKUP TABLE with three columns separated by pipes (|):
+  NAME | PHONE | ROLE
 
 When Theo says anything like "message Ken", "text Sarah", "WhatsApp the VP", "call Pastor Mike":
 1. Scan the CONTACTS LOOKUP TABLE line by line
-2. Find the row where the name matches (or closely matches) what Theo said
-3. In your visible reply, confirm the match: "Found [Full Name] — [Phone] ([Role])"
-4. Then output the send_whatsapp ACTION with that exact phone number
-5. If you cannot find the name in the table, say so and ask Theo to confirm — do NOT guess a number
+2. Find the row where NAME matches what Theo said
+3. Extract the PHONE from the middle column (between the two |)
+4. In your visible reply, confirm: "Found [Full Name] — [Phone] ([Role])"
+5. Then output the send_whatsapp ACTION with phone="[extracted phone from table]"
+6. The phone must come from the table — NEVER make up or guess a phone number
+7. If you cannot find the name, say so — do NOT ask for manual input
 
 Watch for these phrases and ALWAYS suggest relevant actions when you detect them:
 - "I need to", "we have to", "I should", "don't forget", "remind me", "follow up with", "check on" → create_task or set_reminder
@@ -143,16 +146,16 @@ async function fetchMinistryContext() {
   const atRiskCount = atRiskLeaders.length + unpreparedTeachings.filter(t => !inNext7Days(t.date)).length + atRiskGoals.length
 
   const allContacts = [
-    ...leaderContacts.map(c => ({ name: c.name, phone: c.phone_number || '', role: c.role || 'Leader' })),
-    ...memberContacts.map(c => ({ name: c.name, phone: c.phone_number || '', role: 'Member' })),
+    ...leaderContacts.filter(c => c.phone_number).map(c => ({ name: c.name, phone: c.phone_number, role: c.role || 'Leader' })),
+    ...memberContacts.filter(c => c.phone_number).map(c => ({ name: c.name, phone: c.phone_number, role: 'Member' })),
   ]
 
   const contactsTable = allContacts.length
     ? allContacts.map(c => `${c.name} | ${c.phone} | ${c.role}`).join('\n')
-    : '(no contacts stored yet)'
+    : '(no contacts with phone numbers stored yet)'
 
   return `<ministry_context date="${todayStr}">
-CONTACTS LOOKUP TABLE (use this to find phone numbers when Theo asks to message someone):
+CONTACTS LOOKUP TABLE (Theo wants to message someone — find their exact name and phone here):
 ${contactsTable}
 END OF CONTACTS TABLE
 
