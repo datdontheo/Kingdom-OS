@@ -120,9 +120,14 @@ export default function Layout({ children }) {
             <Menu size={22} />
           </button>
           <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: FONT }}>Kingdom Seekers</span>
-          <button onClick={() => navigate('/reminders')} style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}>
-            <Bell size={20} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => navigate('/assistant')} style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}>
+              <MessageSquare size={20} />
+            </button>
+            <button onClick={() => navigate('/reminders')} style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}>
+              <Bell size={20} />
+            </button>
+          </div>
         </div>
 
         <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
