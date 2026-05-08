@@ -620,6 +620,7 @@ export default function Assistant() {
   const inputRef = useRef(null)
   const recognitionRef = useRef(null)
   const finalTranscriptRef = useRef('')
+  const speakIntervalRef = useRef(null)
   const [listening, setListening] = useState(false)
   const [voiceOut, setVoiceOut] = useState(false)
   const [speaking, setSpeaking] = useState(false)
@@ -715,18 +716,55 @@ export default function Assistant() {
 
   function speak(text) {
     if (!window.speechSynthesis) return
+    clearInterval(speakIntervalRef.current)
     window.speechSynthesis.cancel()
-    const utterance = new SpeechSynthesisUtterance(stripMarkdownForSpeech(text))
-    utterance.lang = 'en-US'
-    utterance.rate = 0.95
-    utterance.pitch = 1.0
-    utterance.onstart = () => setSpeaking(true)
-    utterance.onend = () => setSpeaking(false)
-    utterance.onerror = () => setSpeaking(false)
-    window.speechSynthesis.speak(utterance)
+
+    const doSpeak = () => {
+      const utterance = new SpeechSynthesisUtterance(stripMarkdownForSpeech(text))
+      utterance.lang = 'en-US'
+      utterance.rate = 0.92
+      utterance.pitch = 1.0
+
+      // Pick a real voice so Chrome doesn't silently fall back to nothing
+      const voices = window.speechSynthesis.getVoices()
+      const preferred =
+        voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) ||
+        voices.find(v => v.lang.startsWith('en')) ||
+        voices[0]
+      if (preferred) utterance.voice = preferred
+
+      utterance.onstart = () => {
+        setSpeaking(true)
+        // Chrome bug workaround: synthesis pauses silently on long text — keep it alive
+        speakIntervalRef.current = setInterval(() => {
+          if (window.speechSynthesis.paused) window.speechSynthesis.resume()
+        }, 2000)
+      }
+      utterance.onend = () => {
+        clearInterval(speakIntervalRef.current)
+        setSpeaking(false)
+      }
+      utterance.onerror = () => {
+        clearInterval(speakIntervalRef.current)
+        setSpeaking(false)
+      }
+      window.speechSynthesis.speak(utterance)
+    }
+
+    // Voices may not be loaded yet on first call — wait if needed
+    const voices = window.speechSynthesis.getVoices()
+    if (voices.length > 0) {
+      doSpeak()
+    } else {
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.onvoiceschanged = null
+        doSpeak()
+      }
+    }
   }
 
   function stopSpeaking() {
+    clearInterval(speakIntervalRef.current)
     window.speechSynthesis?.cancel()
     setSpeaking(false)
   }
