@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { today, isOverdue, daysSince, inNext7Days } from '../../lib/utils'
 import { scheduleReminder } from '../../hooks/useReminders'
 import { detectActionTriggers, buildTriggerHint, mapActionTypeToSuggestionType, generateCheckInQuestions, createConversationSummary } from '../../lib/assistantUtils'
-import { Send, Loader2, Bot, MessageCircle, CheckSquare, Bell, X, Check, Phone, Zap } from 'lucide-react'
+import { Send, Loader2, Bot, MessageCircle, CheckSquare, Bell, X, Check, Phone, Zap, Mic, MicOff, Volume2, VolumeX } from 'lucide-react'
 
 // ── System prompt ──────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are Kingdom OS — the personal ministry assistant of Theo, Founder and President of Kingdom Seekers Ministry (KSM). You know this ministry deeply and serve Theo as a trusted co-pilot in all things ministry. You are proactive, Kingdom-minded, and practically helpful.
@@ -583,6 +583,11 @@ export default function Assistant() {
   const [contactList, setContactList] = useState([])
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
+  const recognitionRef = useRef(null)
+  const finalTranscriptRef = useRef('')
+  const [listening, setListening] = useState(false)
+  const [voiceOut, setVoiceOut] = useState(false)
+  const [speaking, setSpeaking] = useState(false)
 
   useEffect(() => {
     async function init() {
@@ -660,9 +665,82 @@ export default function Assistant() {
     await supabase.from('assistant_suggestions').insert(rows)
   }
 
-  async function sendMessage(e, isBriefing = false) {
+  function stripMarkdownForSpeech(text) {
+    return text
+      .replace(/<ACTION[\s\S]*?<\/ACTION>/gi, '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/^#{1,3} /gm, '')
+      .replace(/^[-*] /gm, '')
+      .replace(/^\d+\. /gm, '')
+      .replace(/\n{2,}/g, '. ')
+      .replace(/\n/g, ' ')
+      .trim()
+  }
+
+  function speak(text) {
+    if (!window.speechSynthesis) return
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(stripMarkdownForSpeech(text))
+    utterance.lang = 'en-US'
+    utterance.rate = 0.95
+    utterance.pitch = 1.0
+    utterance.onstart = () => setSpeaking(true)
+    utterance.onend = () => setSpeaking(false)
+    utterance.onerror = () => setSpeaking(false)
+    window.speechSynthesis.speak(utterance)
+  }
+
+  function stopSpeaking() {
+    window.speechSynthesis?.cancel()
+    setSpeaking(false)
+  }
+
+  function startListening() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) {
+      alert('Voice input is not supported in this browser. Please use Chrome or Edge.')
+      return
+    }
+    stopSpeaking()
+    const recognition = new SR()
+    recognition.continuous = false
+    recognition.interimResults = true
+    recognition.lang = 'en-US'
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results).map(r => r[0].transcript).join('')
+      setInput(transcript)
+      if (event.results[event.results.length - 1].isFinal) {
+        finalTranscriptRef.current = transcript
+      }
+    }
+
+    recognition.onend = () => {
+      setListening(false)
+      const text = finalTranscriptRef.current.trim()
+      finalTranscriptRef.current = ''
+      if (text) sendMessage(null, false, text)
+    }
+
+    recognition.onerror = () => {
+      setListening(false)
+      finalTranscriptRef.current = ''
+    }
+
+    recognitionRef.current = recognition
+    recognition.start()
+    setListening(true)
+  }
+
+  function stopListening() {
+    recognitionRef.current?.stop()
+    setListening(false)
+  }
+
+  async function sendMessage(e, isBriefing = false, voiceText = null) {
     if (e) e.preventDefault()
-    const userText = isBriefing ? 'Give me my Kingdom OS morning briefing for today.' : input.trim()
+    const userText = voiceText || (isBriefing ? 'Give me my Kingdom OS morning briefing for today.' : input.trim())
     if (!userText || loading) return
     if (!apiKey) {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Please add your Claude API key in Settings to use the assistant.' }])
@@ -733,6 +811,7 @@ export default function Assistant() {
       const assistantMsg = { role: 'assistant', content, ts: new Date().toISOString() }
       setMessages(prev => [...prev, assistantMsg])
       await saveMessage('assistant', content)
+      if (voiceOut) speak(content)
 
       // Handle actions: store_memory runs silently; others become suggestions
       const { actions } = parseActions(content)
@@ -763,14 +842,23 @@ export default function Assistant() {
           <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>Kingdom OS Assistant</h2>
           <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>Powered by Claude · KSM Co-Pilot</p>
         </div>
-        {messages.length > 0 && (
-          <button onClick={clearHistory} disabled={clearing}
-            style={{ fontSize: 12, color: 'var(--text-muted)', padding: '4px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--accent-red)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
-            {clearing ? 'Clearing…' : 'Clear'}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { if (speaking) stopSpeaking(); setVoiceOut(v => !v) }}
+            title={voiceOut ? 'Voice output on — click to mute' : 'Voice output off — click to enable'}
+            style={{ color: voiceOut ? 'var(--accent)' : 'var(--text-muted)', background: voiceOut ? 'var(--accent-dim)' : 'none', border: `1px solid ${voiceOut ? 'var(--border-glow)' : 'var(--border)'}`, padding: '5px 8px', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
+            {voiceOut ? <Volume2 size={14} /> : <VolumeX size={14} />}
+            {speaking && <span style={{ fontSize: 10, color: 'var(--accent)' }}>speaking…</span>}
           </button>
-        )}
+          {messages.length > 0 && (
+            <button onClick={clearHistory} disabled={clearing}
+              style={{ fontSize: 12, color: 'var(--text-muted)', padding: '4px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--accent-red)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+              {clearing ? 'Clearing…' : 'Clear'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Messages */}
@@ -817,14 +905,33 @@ export default function Assistant() {
             style={{ resize: 'none', maxHeight: 128, borderRadius: 14 }}
             onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px' }}
           />
+          <button
+            type="button"
+            onClick={listening ? stopListening : startListening}
+            disabled={loading}
+            title={listening ? 'Stop recording' : 'Speak your message'}
+            style={{
+              padding: '10px 12px', borderRadius: 12, flexShrink: 0, border: 'none', cursor: 'pointer',
+              background: listening ? 'rgba(239,83,80,0.15)' : 'var(--bg-card)',
+              color: listening ? 'var(--accent-red)' : 'var(--text-muted)',
+              outline: listening ? '2px solid var(--accent-red)' : '1px solid var(--border)',
+              animation: listening ? 'pulse 1.2s ease-in-out infinite' : 'none',
+            }}>
+            {listening ? <MicOff size={16} /> : <Mic size={16} />}
+          </button>
           <button type="submit" disabled={!input.trim() || loading} className="btn-primary" style={{ padding: '10px 12px', borderRadius: 12, flexShrink: 0 }}>
             <Send size={16} />
           </button>
         </div>
-        <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>Enter to send · Shift+Enter for new line</p>
+        <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>
+          {listening ? 'Listening… tap mic to stop and send' : 'Enter to send · Shift+Enter for new line · Mic to speak'}
+        </p>
       </form>
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+      `}</style>
     </div>
   )
 }
