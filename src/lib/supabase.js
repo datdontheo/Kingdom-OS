@@ -174,6 +174,8 @@ alter table teaching_calendar add column if not exists related_series text;
 
 alter table meeting_notes add column if not exists agenda text;
 
+alter table meeting_notes add column if not exists time text;
+
 alter table reminders add column if not exists related_meeting_id uuid references meeting_notes(id) on delete set null;
 alter table reminders add column if not exists related_teaching_id uuid references teaching_calendar(id) on delete set null;
 alter table reminders add column if not exists done boolean default false;

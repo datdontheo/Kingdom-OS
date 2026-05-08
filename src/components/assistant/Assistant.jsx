@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { today, isOverdue, daysSince, inNext7Days } from '../../lib/utils'
 import { scheduleReminder } from '../../hooks/useReminders'
 import { detectActionTriggers, buildTriggerHint, mapActionTypeToSuggestionType, generateCheckInQuestions, createConversationSummary } from '../../lib/assistantUtils'
-import { Send, Loader2, Bot, MessageCircle, CheckSquare, Bell, X, Check, Phone, Zap, Mic, MicOff, Volume2, VolumeX } from 'lucide-react'
+import { Send, Loader2, Bot, MessageCircle, CheckSquare, Bell, X, Check, Phone, Zap, Mic, MicOff, Volume2, VolumeX, Calendar } from 'lucide-react'
 
 // ── System prompt ──────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are Kingdom OS — the personal ministry assistant of Theo, Founder and President of Kingdom Seekers Ministry (KSM). You know this ministry deeply and serve Theo as a trusted co-pilot in all things ministry. You are proactive, Kingdom-minded, and practically helpful.
@@ -97,6 +97,8 @@ For a task: <ACTION>{"type":"create_task","title":"[task title]","category":"[Te
 For a reminder: <ACTION>{"type":"set_reminder","title":"[reminder title]","body":"[details]","due_at":"[ISO 8601 datetime e.g. 2026-05-10T08:00:00]","person":"[person name or empty]","whatsapp_message":"[optional message to send to yourself as reminder]"}</ACTION>
 
 For a goal: <ACTION>{"type":"add_goal","title":"[goal title]","category":"[Vision|Discipleship|Events|Teaching|Leadership|Media|Other]","notes":"[brief context]","next_action":"[what is the next step]"}</ACTION>
+
+For scheduling a meeting: <ACTION>{"type":"schedule_meeting","meeting_type":"[Leadership Huddle|One-on-One|Planning Meeting|Discipleship Meeting|Event Meeting|Other]","date":"YYYY-MM-DD","time":"HH:MM","attendees":"[names — pull from CONTACTS LOOKUP TABLE if registered, otherwise use names Theo provided]","agenda":"[what will be covered]","with_phone":"[attendee phone from CONTACTS LOOKUP TABLE if available, else empty]"}</ACTION>
 
 For marking something done: <ACTION>{"type":"mark_done","item_type":"task|reminder|goal|leader_contact","title":"[exact title from ministry context — for task/reminder/goal]","name":"[exact leader name — for leader_contact only]"}</ACTION>
 
@@ -331,6 +333,28 @@ function ActionCard({ action, onDismiss, contacts = {}, contactList = [] }) {
         whatsapp_message: action.whatsapp_message || null,
       })
       setDone(true)
+    } else if (action.type === 'schedule_meeting') {
+      const payload = {
+        meeting_type: action.meeting_type || 'Other',
+        date: action.date,
+        time: action.time || null,
+        attendees: action.attendees || null,
+        agenda: action.agenda || null,
+      }
+      const { data: meeting } = await supabase.from('meeting_notes').insert(payload).select().single()
+      if (meeting && action.date && action.time) {
+        const reminderDate = new Date(`${action.date}T${action.time}:00`)
+        reminderDate.setMinutes(reminderDate.getMinutes() - 30)
+        await supabase.from('reminders').insert({
+          title: `${action.meeting_type || 'Meeting'} with ${action.attendees || 'attendees'}`,
+          body: action.agenda || '',
+          due_at: reminderDate.toISOString(),
+          related_meeting_id: meeting.id,
+          status: 'pending',
+          done: false,
+        })
+      }
+      setDone(true)
     } else if (action.type === 'mark_done') {
       if (action.item_type === 'task') {
         await supabase.from('tasks').update({ status: 'Done' }).ilike('title', `%${action.title}%`)
@@ -346,9 +370,9 @@ function ActionCard({ action, onDismiss, contacts = {}, contactList = [] }) {
     setSaving(false)
   }
 
-  const icons = { send_whatsapp: MessageCircle, create_task: CheckSquare, set_reminder: Bell, mark_done: Check }
-  const colors = { send_whatsapp: 'var(--accent-green)', create_task: 'var(--accent-blue)', set_reminder: 'var(--accent-amber)', mark_done: 'var(--accent-green)' }
-  const labels = { send_whatsapp: 'WhatsApp Message', create_task: 'Create Task', set_reminder: 'Set Reminder', mark_done: 'Mark as Done' }
+  const icons = { send_whatsapp: MessageCircle, create_task: CheckSquare, set_reminder: Bell, mark_done: Check, schedule_meeting: Calendar }
+  const colors = { send_whatsapp: 'var(--accent-green)', create_task: 'var(--accent-blue)', set_reminder: 'var(--accent-amber)', mark_done: 'var(--accent-green)', schedule_meeting: '#8b5cf6' }
+  const labels = { send_whatsapp: 'WhatsApp Message', create_task: 'Create Task', set_reminder: 'Set Reminder', mark_done: 'Mark as Done', schedule_meeting: 'Schedule Meeting' }
   const Icon = icons[action.type] || Zap
   const color = colors[action.type] || 'var(--accent)'
 
@@ -436,6 +460,17 @@ function ActionCard({ action, onDismiss, contacts = {}, contactList = [] }) {
               {action.body && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{action.body}</p>}
             </>
           )}
+          {action.type === 'schedule_meeting' && (
+            <>
+              <p style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>{action.meeting_type || 'Meeting'}</p>
+              {action.attendees && <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>With: {action.attendees}</p>}
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                {action.date}{action.time ? ` at ${action.time}` : ''}
+              </p>
+              {action.agenda && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{action.agenda}</p>}
+              {action.time && <p style={{ fontSize: 11, color: '#8b5cf6', marginTop: 4 }}>Reminder will be set 30 min before</p>}
+            </>
+          )}
           {action.type === 'mark_done' && (
             <>
               <p style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>
@@ -463,7 +498,7 @@ function ActionCard({ action, onDismiss, contacts = {}, contactList = [] }) {
         >
           <span className="flex items-center gap-1.5">
             <Check size={12} />
-            {action.type === 'send_whatsapp' ? 'Open WhatsApp' : action.type === 'create_task' ? 'Create Task' : action.type === 'set_reminder' ? 'Set Reminder' : 'Mark Done'}
+            {action.type === 'send_whatsapp' ? 'Open WhatsApp' : action.type === 'create_task' ? 'Create Task' : action.type === 'set_reminder' ? 'Set Reminder' : action.type === 'schedule_meeting' ? 'Schedule' : 'Mark Done'}
           </span>
         </button>
         <button onClick={onDismiss} className="btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }}>Dismiss</button>
