@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { today, isOverdue, daysSince, inNext7Days } from '../../lib/utils'
 import { scheduleReminder } from '../../hooks/useReminders'
 import { detectActionTriggers, buildTriggerHint, mapActionTypeToSuggestionType, generateCheckInQuestions, createConversationSummary } from '../../lib/assistantUtils'
-import { Send, Loader2, Bot, MessageCircle, CheckSquare, Bell, X, Check, Phone, Zap, Mic, MicOff, Volume2, VolumeX, Calendar } from 'lucide-react'
+import { Send, Loader2, Bot, MessageCircle, CheckSquare, Bell, X, Check, Phone, Zap, Mic, MicOff, Volume2, VolumeX, Calendar, Paperclip } from 'lucide-react'
 
 // ── System prompt ──────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are Kingdom OS — the personal ministry assistant of Theo, Founder and President of Kingdom Seekers Ministry (KSM). You know this ministry deeply and serve Theo as a trusted co-pilot in all things ministry. You are proactive, Kingdom-minded, and practically helpful.
@@ -114,6 +114,14 @@ You have access to <assistant_memory> in your context — key facts, patterns, a
 
 When you learn something genuinely worth remembering across sessions (a preference, a recurring pattern, a key fact about a person or ministry area), use the store_memory action — but only for things that will remain relevant long-term, not one-time observations:
 <ACTION>{"type":"store_memory","key":"short descriptive label","value":"the full fact to remember","category":"observation|preference|instruction|pattern"}</ACTION>
+
+ATTACHED DOCUMENTS:
+When Theo attaches a file, it will appear in his message wrapped in [ATTACHED DOCUMENT: filename] ... [END DOCUMENT]. When this happens:
+1. Read the document carefully and answer Theo's question or request about it.
+2. Extract any facts that should update your understanding of KSM — people, roles, decisions, projects, status updates, goals, dates, plans.
+3. For each meaningful fact worth remembering across sessions, emit a store_memory action. Be thorough — if the document is a report or minutes or plan, capture all key decisions, people, and statuses.
+4. End your response with a brief summary: "I've updated my memory with X key facts from this document."
+If Theo just says "read this" or "update your memory", focus on extraction. If he asks a specific question, answer it first then extract.
 
 FORMATTING:
 Never use emojis anywhere in your responses. Use plain text only. You may use **double asterisks** for bold to emphasise key names, dates, or action items — these render as actual bold text in the interface.`
@@ -616,8 +624,10 @@ export default function Assistant() {
   const [clearing, setClearing] = useState(false)
   const [contacts, setContacts] = useState({})
   const [contactList, setContactList] = useState([])
+  const [attachment, setAttachment] = useState(null) // { name, content }
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
+  const fileInputRef = useRef(null)
   const recognitionRef = useRef(null)
   const finalTranscriptRef = useRef('')
   const speakIntervalRef = useRef(null)
@@ -685,6 +695,23 @@ export default function Assistant() {
     setMessages([])
     sessionStorage.removeItem('ksm_briefing_date')
     setClearing(false)
+  }
+
+  function handleFileSelect(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    const MAX_CHARS = 40000
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      let content = ev.target.result
+      if (content.length > MAX_CHARS) {
+        content = content.slice(0, MAX_CHARS) + '\n\n[Document truncated — first 40,000 characters shown]'
+      }
+      setAttachment({ name: file.name, content })
+    }
+    reader.onerror = () => alert('Could not read file. Please use a plain text or markdown file.')
+    reader.readAsText(file)
   }
 
   async function saveActionsAsSuggestions(actions) {
@@ -813,19 +840,31 @@ export default function Assistant() {
 
   async function sendMessage(e, isBriefing = false, voiceText = null) {
     if (e) e.preventDefault()
-    const userText = voiceText || (isBriefing ? 'Give me my Kingdom OS morning briefing for today.' : input.trim())
-    if (!userText || loading) return
+    const rawText = voiceText || (isBriefing ? 'Give me my Kingdom OS morning briefing for today.' : input.trim())
+    if (!rawText || loading) return
     if (!apiKey) {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Please add your Claude API key in Settings to use the assistant.' }])
       return
     }
 
-    const userMsg = { role: 'user', content: userText, ts: new Date().toISOString() }
+    // Attach document content if present
+    const currentAttachment = attachment
+    const userText = currentAttachment
+      ? `${rawText}\n\n[ATTACHED DOCUMENT: ${currentAttachment.name}]\n${currentAttachment.content}\n[END DOCUMENT]`
+      : rawText
+
+    // Show the user message without the raw file dump — display cleanly
+    const displayText = currentAttachment
+      ? `${rawText}\n\n[Attached: ${currentAttachment.name}]`
+      : rawText
+
+    const userMsg = { role: 'user', content: displayText, ts: new Date().toISOString() }
     const newMessages = [...messages, userMsg]
     setMessages(newMessages)
     setInput('')
+    setAttachment(null)
     setLoading(true)
-    await saveMessage('user', userText)
+    await saveMessage('user', displayText)
 
     try {
       const [context, documentsXml] = await Promise.all([
@@ -851,7 +890,11 @@ export default function Assistant() {
       }
 
       // Ensure messages start with a user turn (Claude API requirement)
-      let trimmed = newMessages.slice(-MAX_HISTORY).map(m => ({ role: m.role, content: m.content }))
+      // For the last message, send full content (with document) instead of the display version
+      let trimmed = newMessages.slice(-MAX_HISTORY).map((m, idx, arr) => ({
+        role: m.role,
+        content: idx === arr.length - 1 && m.role === 'user' ? userText : m.content,
+      }))
       while (trimmed.length > 0 && trimmed[0].role !== 'user') trimmed = trimmed.slice(1)
 
       const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -966,18 +1009,52 @@ export default function Assistant() {
       {/* Input */}
       <form onSubmit={sendMessage} className="shrink-0"
         style={{ borderTop: '1px solid var(--border)', background: 'var(--bg-surface)', backdropFilter: 'blur(16px)', padding: '16px 20px' }}>
+
+        {/* Attachment chip */}
+        {attachment && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, padding: '6px 10px', borderRadius: 8, background: 'rgba(184,155,56,0.1)', border: '1px solid var(--border-glow)', width: 'fit-content', maxWidth: '100%' }}>
+            <Paperclip size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+            <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>{attachment.name}</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>({Math.round(attachment.content.length / 1000)}k chars)</span>
+            <button type="button" onClick={() => setAttachment(null)} style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}>
+              <X size={12} />
+            </button>
+          </div>
+        )}
+
         <div className="flex gap-2 items-end">
           <textarea
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(e) } }}
-            placeholder="Ask anything about KSM…"
+            placeholder={attachment ? `Ask something about ${attachment.name}…` : 'Ask anything about KSM…'}
             rows={1}
             className="ksm-input"
             style={{ resize: 'none', maxHeight: 128, borderRadius: 14 }}
             onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px' }}
           />
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".txt,.md,.csv,.json,.rtf,text/plain,text/markdown,text/csv,application/json"
+            style={{ display: 'none' }}
+            onChange={handleFileSelect}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading}
+            title="Attach a document"
+            style={{
+              padding: '10px 12px', borderRadius: 12, flexShrink: 0, border: 'none', cursor: 'pointer',
+              background: attachment ? 'rgba(184,155,56,0.15)' : 'var(--bg-card)',
+              color: attachment ? 'var(--accent)' : 'var(--text-muted)',
+              outline: attachment ? '2px solid var(--border-glow)' : '1px solid var(--border)',
+            }}>
+            <Paperclip size={16} />
+          </button>
           <button
             type="button"
             onClick={listening ? stopListening : startListening}
@@ -992,12 +1069,12 @@ export default function Assistant() {
             }}>
             {listening ? <MicOff size={16} /> : <Mic size={16} />}
           </button>
-          <button type="submit" disabled={!input.trim() || loading} className="btn-primary" style={{ padding: '10px 12px', borderRadius: 12, flexShrink: 0 }}>
+          <button type="submit" disabled={(!input.trim() && !attachment) || loading} className="btn-primary" style={{ padding: '10px 12px', borderRadius: 12, flexShrink: 0 }}>
             <Send size={16} />
           </button>
         </div>
         <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>
-          {listening ? 'Listening… tap mic to stop and send' : 'Enter to send · Shift+Enter for new line · Mic to speak'}
+          {listening ? 'Listening… tap mic to stop and send' : 'Enter to send · Shift+Enter for new line · Mic to speak · Paperclip to attach'}
         </p>
       </form>
 
