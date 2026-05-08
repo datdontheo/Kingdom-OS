@@ -98,7 +98,16 @@ For a reminder: <ACTION>{"type":"set_reminder","title":"[reminder title]","body"
 
 For a goal: <ACTION>{"type":"add_goal","title":"[goal title]","category":"[Vision|Discipleship|Events|Teaching|Leadership|Media|Other]","notes":"[brief context]","next_action":"[what is the next step]"}</ACTION>
 
-One ACTION block per distinct action. Do not explain the action blocks — just append them silently at the end.`
+One ACTION block per distinct action. Do not explain the action blocks — just append them silently at the end.
+
+MINISTRY DOCUMENTS:
+When <ministry_documents> are present in your context, use them as authoritative reference material for KSM. Cite specific documents when relevant. Treat their content as established ministry truth unless Theo says otherwise.
+
+MEMORY:
+You have access to <assistant_memory> in your context — key facts, patterns, and preferences stored from past interactions. Use these to personalise responses and anticipate needs without Theo having to repeat himself.
+
+When you learn something genuinely worth remembering across sessions (a preference, a recurring pattern, a key fact about a person or ministry area), use the store_memory action — but only for things that will remain relevant long-term, not one-time observations:
+<ACTION>{"type":"store_memory","key":"short descriptive label","value":"the full fact to remember","category":"observation|preference|instruction|pattern"}</ACTION>`
 
 // ── Ministry context ───────────────────────────────────────────────
 async function fetchMinistryContext() {
@@ -118,6 +127,7 @@ async function fetchMinistryContext() {
     supabase.from('reminders').select('title, due_at').eq('status', 'pending').eq('done', false).lte('due_at', next7Str + 'T23:59:59').order('due_at').limit(5),
     supabase.from('leaders').select('name, role, phone_number').not('phone_number', 'is', null),
     supabase.from('people').select('name, phone_number').not('phone_number', 'is', null),
+    supabase.from('assistant_memory').select('key, value, category').order('updated_at', { ascending: false }).limit(50),
   ])
 
   const get = (i) => results[i].status === 'fulfilled' ? (results[i].value.data || []) : []
@@ -128,6 +138,7 @@ async function fetchMinistryContext() {
   const reminders = get(4)
   const leaderContacts = get(5)
   const memberContacts = get(6)
+  const memories = get(7)
 
   const overdueLeaders = leaders.filter(l =>
     l.follow_up_due_date ? isOverdue(l.follow_up_due_date) :
@@ -190,7 +201,24 @@ END OF CONTACTS TABLE
   <upcoming_reminders count="${reminders.length}">
     ${reminders.map(r => `<reminder title="${r.title}" due="${r.due_at}" />`).join('\n    ')}
   </upcoming_reminders>
+  ${memories.length > 0 ? `<assistant_memory count="${memories.length}">
+    ${memories.map(m => `<memory category="${m.category}" key="${m.key}">${m.value}</memory>`).join('\n    ')}
+  </assistant_memory>` : ''}
 </ministry_context>`
+}
+
+// ── Document knowledge base ────────────────────────────────────────
+async function fetchDocumentsXml() {
+  const { data } = await supabase
+    .from('ministry_documents')
+    .select('title, content, doc_type')
+    .eq('active', true)
+    .order('created_at', { ascending: true })
+  if (!data || data.length === 0) return ''
+  const docs = data.map(d =>
+    `<document type="${d.doc_type}" title="${d.title}">\n${d.content}\n</document>`
+  ).join('\n')
+  return `\n\n<ministry_documents>\n${docs}\n</ministry_documents>`
 }
 
 // ── Action parsing ─────────────────────────────────────────────────
@@ -566,11 +594,17 @@ export default function Assistant() {
     await saveMessage('user', userText)
 
     try {
-      const context = await fetchMinistryContext()
+      const [context, documentsXml] = await Promise.all([
+        fetchMinistryContext(),
+        fetchDocumentsXml(),
+      ])
       const triggers = isBriefing ? [] : detectActionTriggers(userText)
       const triggerHint = buildTriggerHint(triggers)
 
-      // Build dynamic context (appended after static SYSTEM_PROMPT)
+      // Cached portion: static SYSTEM_PROMPT + ministry documents (rarely change)
+      const cachedSystem = SYSTEM_PROMPT + documentsXml
+
+      // Dynamic portion: live data + hints + conversation summary
       const conversationSummary = createConversationSummary(messages, 7)
       let dynamicContext = '\n\n' + context + triggerHint
       if (conversationSummary) dynamicContext += '\n\n' + conversationSummary
@@ -599,7 +633,7 @@ export default function Assistant() {
           model: 'claude-sonnet-4-6',
           max_tokens: 2048,
           system: [
-            { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+            { type: 'text', text: cachedSystem, cache_control: { type: 'ephemeral' } },
             { type: 'text', text: dynamicContext },
           ],
           messages: trimmed,
@@ -617,10 +651,16 @@ export default function Assistant() {
       setMessages(prev => [...prev, assistantMsg])
       await saveMessage('assistant', content)
 
-      // Save extracted actions as suggestions for the Suggestions module
+      // Handle actions: store_memory runs silently; others become suggestions
       const { actions } = parseActions(content)
       if (actions.length > 0) {
-        saveActionsAsSuggestions(actions).catch(() => {})
+        const memoryActions = actions.filter(a => a.type === 'store_memory')
+        if (memoryActions.length > 0) {
+          const rows = memoryActions.map(a => ({ key: a.key, value: a.value, category: a.category || 'observation', source: 'ai' }))
+          supabase.from('assistant_memory').insert(rows).then(() => {})
+        }
+        const suggestionActions = actions.filter(a => a.type !== 'store_memory')
+        if (suggestionActions.length > 0) saveActionsAsSuggestions(suggestionActions).catch(() => {})
       }
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}. Please check your API key in Settings.`, ts: new Date().toISOString() }])

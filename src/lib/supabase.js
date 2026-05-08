@@ -177,4 +177,23 @@ alter table meeting_notes add column if not exists agenda text;
 alter table reminders add column if not exists related_meeting_id uuid references meeting_notes(id) on delete set null;
 alter table reminders add column if not exists related_teaching_id uuid references teaching_calendar(id) on delete set null;
 alter table reminders add column if not exists done boolean default false;
+
+create table if not exists ministry_documents (
+  id uuid default gen_random_uuid() primary key,
+  title text not null,
+  content text not null,
+  doc_type text default 'Other',
+  active boolean default true,
+  created_at timestamptz default now()
+);
+
+create table if not exists assistant_memory (
+  id uuid default gen_random_uuid() primary key,
+  key text not null,
+  value text not null,
+  category text default 'observation',
+  source text default 'ai',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
 `
