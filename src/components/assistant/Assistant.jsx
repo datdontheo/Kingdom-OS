@@ -554,7 +554,7 @@ export default function Assistant() {
     const userText = isBriefing ? 'Give me my Kingdom OS morning briefing for today.' : input.trim()
     if (!userText || loading) return
     if (!apiKey) {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Please add your Groq API key in Settings to use the assistant.' }])
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Please add your Claude API key in Settings to use the assistant.' }])
       return
     }
 
@@ -570,42 +570,49 @@ export default function Assistant() {
       const triggers = isBriefing ? [] : detectActionTriggers(userText)
       const triggerHint = buildTriggerHint(triggers)
 
-      let systemWithContext = SYSTEM_PROMPT + '\n\n' + context + triggerHint
-
-      // Add conversation history summary to give context awareness
+      // Build dynamic context (appended after static SYSTEM_PROMPT)
       const conversationSummary = createConversationSummary(messages, 7)
-      if (conversationSummary) {
-        systemWithContext += '\n\n' + conversationSummary
-      }
-
-      // Add check-in questions hint for briefings
+      let dynamicContext = '\n\n' + context + triggerHint
+      if (conversationSummary) dynamicContext += '\n\n' + conversationSummary
       if (isBriefing) {
         const checkInQs = generateCheckInQuestions(context)
         if (checkInQs.length > 0) {
           const qsText = checkInQs.map(q => `- ${q.text}`).join('\n')
-          systemWithContext += `\n\n[CHECK-IN QUESTIONS TO ASK]: Answer and address these proactively in your briefing:\n${qsText}`
+          dynamicContext += `\n\n[CHECK-IN QUESTIONS TO ASK]: Answer and address these proactively in your briefing:\n${qsText}`
         }
       }
 
-      const trimmed = newMessages.slice(-MAX_HISTORY).map(m => ({ role: m.role, content: m.content }))
+      // Ensure messages start with a user turn (Claude API requirement)
+      let trimmed = newMessages.slice(-MAX_HISTORY).map(m => ({ role: m.role, content: m.content }))
+      while (trimmed.length > 0 && trimmed[0].role !== 'user') trimmed = trimmed.slice(1)
 
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'prompt-caching-2024-07-31',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          max_tokens: 1500,
-          messages: [{ role: 'system', content: systemWithContext }, ...trimmed],
+          model: 'claude-sonnet-4-6',
+          max_tokens: 2048,
+          system: [
+            { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+            { type: 'text', text: dynamicContext },
+          ],
+          messages: trimmed,
         }),
       })
 
       if (!response.ok) {
         const err = await response.json()
-        throw new Error(err.error?.message || 'API error')
+        throw new Error(err.error?.message || err.error?.type || 'API error')
       }
 
       const data = await response.json()
-      const content = data.choices[0].message.content
+      const content = data.content[0].text
       const assistantMsg = { role: 'assistant', content, ts: new Date().toISOString() }
       setMessages(prev => [...prev, assistantMsg])
       await saveMessage('assistant', content)
@@ -631,7 +638,7 @@ export default function Assistant() {
         style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)', backdropFilter: 'blur(16px)' }}>
         <div>
           <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>Kingdom OS Assistant</h2>
-          <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>Powered by Groq · KSM Co-Pilot</p>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>Powered by Claude · KSM Co-Pilot</p>
         </div>
         {messages.length > 0 && (
           <button onClick={clearHistory} disabled={clearing}
@@ -652,7 +659,7 @@ export default function Assistant() {
             </div>
             <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Your ministry co-pilot is ready.</p>
             {!apiKey ? (
-              <p style={{ fontSize: 12, color: 'var(--accent-amber)' }}>Add your Groq API key in Settings to begin.</p>
+              <p style={{ fontSize: 12, color: 'var(--accent-amber)' }}>Add your Claude API key in Settings to begin.</p>
             ) : (
               <p style={{ fontSize: 12 }}>Ask anything about KSM — I'll suggest actions you can approve.</p>
             )}

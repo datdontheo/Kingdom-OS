@@ -113,24 +113,31 @@ function AIPrepPanel({ event, apiKey, onSaved }) {
   const [results, setResults] = useState({})
 
   async function runAIPrep(btn) {
-    if (!apiKey) { alert('Please add your Groq API key in Settings to use AI prep tools.'); return }
+    if (!apiKey) { alert('Please add your Claude API key in Settings to use AI prep tools.'); return }
     setLoadingKey(btn.key)
     try {
       const prompt = btn.prompt(event)
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          max_tokens: 2000,
-          messages: [
-            { role: 'system', content: 'You are Kingdom OS, a ministry assistant helping Pastor Theophilus Laryea of Kingdom Seekers Ministry prepare powerful, scripturally sound teachings. Always use NKJV when quoting scripture. Be practical, clear, and spiritually grounded.' },
-            { role: 'user', content: prompt },
-          ],
+          model: 'claude-sonnet-4-6',
+          max_tokens: 2048,
+          system: 'You are Kingdom OS, a ministry assistant helping Pastor Theophilus Laryea of Kingdom Seekers Ministry prepare powerful, scripturally sound teachings. Always use NKJV when quoting scripture. Be practical, clear, and spiritually grounded.',
+          messages: [{ role: 'user', content: prompt }],
         }),
       })
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.error?.message || err.error?.type || 'API error')
+      }
       const data = await response.json()
-      const text = data.choices?.[0]?.message?.content || 'No response generated.'
+      const text = data.content?.[0]?.text || 'No response generated.'
       setResults(prev => ({ ...prev, [btn.key]: text }))
     } catch (err) {
       setResults(prev => ({ ...prev, [btn.key]: `Error: ${err.message}` }))

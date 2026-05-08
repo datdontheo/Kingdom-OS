@@ -112,8 +112,8 @@ export default function Settings() {
         </Field>
       </Section>
 
-      {/* Groq API */}
-      <Section title="Groq API Key" subtitle="Required to use the AI Assistant. Get your free key at console.groq.com">
+      {/* Claude API */}
+      <Section title="Claude API Key" subtitle="Required to use the AI Assistant. Get your key at console.anthropic.com">
         <Field label="API Key">
           <div style={{ position: 'relative' }}>
             <input
@@ -121,7 +121,7 @@ export default function Settings() {
               type={showKey ? 'text' : 'password'}
               value={form.claude_api_key}
               onChange={e => set('claude_api_key', e.target.value)}
-              placeholder="gsk_…"
+              placeholder="sk-ant-…"
               style={{ paddingRight: 40 }}
             />
             <button onClick={() => setShowKey(!showKey)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
