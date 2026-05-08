@@ -98,6 +98,10 @@ For a reminder: <ACTION>{"type":"set_reminder","title":"[reminder title]","body"
 
 For a goal: <ACTION>{"type":"add_goal","title":"[goal title]","category":"[Vision|Discipleship|Events|Teaching|Leadership|Media|Other]","notes":"[brief context]","next_action":"[what is the next step]"}</ACTION>
 
+For marking something done: <ACTION>{"type":"mark_done","item_type":"task|reminder|goal|leader_contact","title":"[exact title from ministry context — for task/reminder/goal]","name":"[exact leader name — for leader_contact only]"}</ACTION>
+
+Use mark_done when Theo says he has completed a task, ticked off a reminder, achieved a goal, or spoken with / connected with a leader. Match the title or name exactly as it appears in the ministry context. This will update the record in the database so it no longer appears in his lists.
+
 One ACTION block per distinct action. Do not explain the action blocks — just append them silently at the end.
 
 MINISTRY DOCUMENTS:
@@ -327,13 +331,24 @@ function ActionCard({ action, onDismiss, contacts = {}, contactList = [] }) {
         whatsapp_message: action.whatsapp_message || null,
       })
       setDone(true)
+    } else if (action.type === 'mark_done') {
+      if (action.item_type === 'task') {
+        await supabase.from('tasks').update({ status: 'Done' }).ilike('title', `%${action.title}%`)
+      } else if (action.item_type === 'reminder') {
+        await supabase.from('reminders').update({ done: true, status: 'done' }).ilike('title', `%${action.title}%`)
+      } else if (action.item_type === 'goal') {
+        await supabase.from('goals').update({ status: 'Completed' }).ilike('title', `%${action.title}%`)
+      } else if (action.item_type === 'leader_contact') {
+        await supabase.from('leaders').update({ last_contact_date: new Date().toISOString().split('T')[0] }).ilike('name', `%${action.name}%`)
+      }
+      setDone(true)
     }
     setSaving(false)
   }
 
-  const icons = { send_whatsapp: MessageCircle, create_task: CheckSquare, set_reminder: Bell }
-  const colors = { send_whatsapp: 'var(--accent-green)', create_task: 'var(--accent-blue)', set_reminder: 'var(--accent-amber)' }
-  const labels = { send_whatsapp: 'WhatsApp Message', create_task: 'Create Task', set_reminder: 'Set Reminder' }
+  const icons = { send_whatsapp: MessageCircle, create_task: CheckSquare, set_reminder: Bell, mark_done: Check }
+  const colors = { send_whatsapp: 'var(--accent-green)', create_task: 'var(--accent-blue)', set_reminder: 'var(--accent-amber)', mark_done: 'var(--accent-green)' }
+  const labels = { send_whatsapp: 'WhatsApp Message', create_task: 'Create Task', set_reminder: 'Set Reminder', mark_done: 'Mark as Done' }
   const Icon = icons[action.type] || Zap
   const color = colors[action.type] || 'var(--accent)'
 
@@ -421,6 +436,19 @@ function ActionCard({ action, onDismiss, contacts = {}, contactList = [] }) {
               {action.body && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{action.body}</p>}
             </>
           )}
+          {action.type === 'mark_done' && (
+            <>
+              <p style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>
+                {action.item_type === 'leader_contact' ? action.name : action.title}
+              </p>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, textTransform: 'capitalize' }}>
+                {action.item_type === 'task' && 'Task — will be marked Done'}
+                {action.item_type === 'reminder' && 'Reminder — will be marked complete'}
+                {action.item_type === 'goal' && 'Goal — will be marked Completed'}
+                {action.item_type === 'leader_contact' && "Leader — last contact date set to today"}
+              </p>
+            </>
+          )}
         </div>
         <button onClick={onDismiss} style={{ color: 'var(--text-muted)', flexShrink: 0, padding: 2 }}>
           <X size={14} />
@@ -435,7 +463,7 @@ function ActionCard({ action, onDismiss, contacts = {}, contactList = [] }) {
         >
           <span className="flex items-center gap-1.5">
             <Check size={12} />
-            {action.type === 'send_whatsapp' ? 'Open WhatsApp' : action.type === 'create_task' ? 'Create Task' : 'Set Reminder'}
+            {action.type === 'send_whatsapp' ? 'Open WhatsApp' : action.type === 'create_task' ? 'Create Task' : action.type === 'set_reminder' ? 'Set Reminder' : 'Mark Done'}
           </span>
         </button>
         <button onClick={onDismiss} className="btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }}>Dismiss</button>
