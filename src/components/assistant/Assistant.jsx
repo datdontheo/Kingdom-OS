@@ -107,7 +107,10 @@ MEMORY:
 You have access to <assistant_memory> in your context — key facts, patterns, and preferences stored from past interactions. Use these to personalise responses and anticipate needs without Theo having to repeat himself.
 
 When you learn something genuinely worth remembering across sessions (a preference, a recurring pattern, a key fact about a person or ministry area), use the store_memory action — but only for things that will remain relevant long-term, not one-time observations:
-<ACTION>{"type":"store_memory","key":"short descriptive label","value":"the full fact to remember","category":"observation|preference|instruction|pattern"}</ACTION>`
+<ACTION>{"type":"store_memory","key":"short descriptive label","value":"the full fact to remember","category":"observation|preference|instruction|pattern"}</ACTION>
+
+FORMATTING:
+Never use emojis anywhere in your responses. Use plain text only. You may use **double asterisks** for bold to emphasise key names, dates, or action items — these render as actual bold text in the interface.`
 
 // ── Ministry context ───────────────────────────────────────────────
 async function fetchMinistryContext() {
@@ -442,6 +445,60 @@ function ActionCard({ action, onDismiss, contacts = {}, contactList = [] }) {
 }
 
 // ── Message bubble ─────────────────────────────────────────────────
+// ── Markdown renderer ──────────────────────────────────────────────
+function renderInline(text, key) {
+  const parts = []
+  const regex = /(\*\*(.+?)\*\*|\*(.+?)\*)/g
+  let last = 0
+  let m
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index))
+    if (m[0].startsWith('**')) parts.push(<strong key={m.index}>{m[2]}</strong>)
+    else parts.push(<em key={m.index}>{m[3]}</em>)
+    last = regex.lastIndex
+  }
+  if (last < text.length) parts.push(text.slice(last))
+  return parts
+}
+
+function renderMarkdown(text) {
+  const lines = text.split('\n')
+  const out = []
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]
+    // Blank line — small gap
+    if (line.trim() === '') {
+      if (out.length > 0) out.push(<div key={`gap-${i}`} style={{ height: 6 }} />)
+      i++; continue
+    }
+    // Heading: #, ##, ###
+    if (/^#{1,3} /.test(line)) {
+      out.push(<p key={i} style={{ fontWeight: 700, marginBottom: 2, marginTop: out.length ? 6 : 0 }}>{renderInline(line.replace(/^#{1,3} /, ''))}</p>)
+      i++; continue
+    }
+    // Unordered list
+    if (/^[-*] /.test(line)) {
+      const items = []
+      while (i < lines.length && /^[-*] /.test(lines[i])) { items.push(lines[i].replace(/^[-*] /, '')); i++ }
+      out.push(<ul key={`ul-${i}`} style={{ paddingLeft: 18, margin: '4px 0' }}>{items.map((t, j) => <li key={j} style={{ marginBottom: 2 }}>{renderInline(t)}</li>)}</ul>)
+      continue
+    }
+    // Ordered list
+    if (/^\d+\. /.test(line)) {
+      const items = []
+      while (i < lines.length && /^\d+\. /.test(lines[i])) { items.push(lines[i].replace(/^\d+\. /, '')); i++ }
+      out.push(<ol key={`ol-${i}`} style={{ paddingLeft: 20, margin: '4px 0' }}>{items.map((t, j) => <li key={j} style={{ marginBottom: 2 }}>{renderInline(t)}</li>)}</ol>)
+      continue
+    }
+    // Normal line
+    const isLast = i === lines.length - 1
+    out.push(<span key={i}>{renderInline(line)}{!isLast && <br />}</span>)
+    i++
+  }
+  return out
+}
+
 function MessageBubble({ msg, timestamp, contacts, contactList }) {
   const isUser = msg.role === 'user'
   const { text, actions } = parseActions(msg.content)
@@ -467,9 +524,7 @@ function MessageBubble({ msg, timestamp, contacts, contactList }) {
             color: isUser ? '#fff' : 'var(--text-primary)',
           }}
         >
-          {text.split('\n').map((line, i, arr) => (
-            <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
-          ))}
+          {isUser ? text.split('\n').map((line, i, arr) => <span key={i}>{line}{i < arr.length - 1 && <br />}</span>) : renderMarkdown(text)}
         </div>
         {actions.map((action, i) =>
           !dismissed.includes(i) && (
